@@ -84,11 +84,4 @@ export default {
       }
       
 
-    // setLocalStream( stream, mirrorMode = true ) {
-    //     const localVidElem = document.getElementById( 'local' );
-    //    console.log('setlocalstream', stream)
-    //     localVidElem.srcObject = stream;
-    //     mirrorMode ? localVidElem.classList.add( 'mirror-mode' ) : localVidElem.classList.remove( 'mirror-mode' );
-    // }
-
 };
