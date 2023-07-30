@@ -77,6 +77,7 @@ export default {
         try {
           const localVidElem = document.getElementById('local');
           localVidElem.srcObject = stream;
+          console.log('setlocalstream', stream)
           mirrorMode ? localVidElem.classList.add('mirror-mode') : localVidElem.classList.remove('mirror-mode');
         } catch (error) {
           console.error('Error setting local stream:', error);

@@ -919,28 +919,57 @@ function init( createOffer, partnerName ) {
 
 
   //add
-  pc[partnerName].ontrack = ( e ) => {
-      let str = e.streams[0];
-      console.log('add stream', str)
-      if ( document.getElementById( `${ partnerName }-video` ) ) {
-          document.getElementById( `${ partnerName }-video` ).srcObject = str;
-      }
+  pc[partnerName].ontrack = (e) => {
+    let remoteStream = e.streams[0];
+    console.log('Received remote stream:', remoteStream);
 
-      else {
-          //video elem
-          let newVid = document.createElement( 'video' );
-          newVid.id = `${ partnerName }-video`;
-          newVid.srcObject = str;
-          newVid.autoplay = true;
-          newVid.className = 'remote-video';
-          newVid.disablePictureInPicture = true;
-          videos.append(newVid);
+    if (document.getElementById(`${partnerName}-video`)) {
+        // Video element exists, update the source if the stream is valid
+        if (remoteStream && remoteStream.getTracks().length > 0) {
+            document.getElementById(`${partnerName}-video`).srcObject = remoteStream;
+        } else {
+            console.error('Received invalid remote stream.');
+        }
+    } else {
+        // Video element does not exist, create and add it to the page
+        if (remoteStream && remoteStream.getTracks().length > 0) {
+            let newVid = document.createElement('video');
+            newVid.id = `${partnerName}-video`;
+            newVid.srcObject = remoteStream;
+            newVid.className = 'remote-video';
+            newVid.autoplay = true;
+            newVid.disablePictureInPicture = true;
+
+            document.getElementById('videos').appendChild(newVid);
+            console.log('New video element created for', partnerName);
+        } else {
+            console.error('Received invalid remote stream.');
+        }
+    }
+};
+
+  // pc[partnerName].ontrack = ( e ) => {
+  //     let str = e.streams[0];
+  //     console.log('old player in town', str, partnerName)
+  //     if ( document.getElementById( `${ partnerName }-video` ) ) {
+  //         document.getElementById( `${ partnerName }-video` ).srcObject = str;
+  //     }
+
+  //     else {
+  //         //video elem
+  //         let newVid = document.createElement( 'video' );
+  //         newVid.id = `${ partnerName }-video`;
+  //         newVid.srcObject = str;
+  //         newVid.className = 'remote-video';
+  //         newVid.autoplay = true;
+  //         newVid.disablePictureInPicture = true;
+  //         videos.append(newVid);
   
-          document.getElementById( 'videos' ).appendChild( newVid );
-          console.log('new player in town', str)
-          //h.adjustVideoElemSize();
-      }
-  };
+  //         document.getElementById( 'videos' ).appendChild( newVid );
+  //         console.log('new player in town', str)
+  //         //h.adjustVideoElemSize();
+  //     }
+  // };
 
 
 
