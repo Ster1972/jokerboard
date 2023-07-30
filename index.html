@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, shrink-to-fit=no, minimal-ui">
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-sttle" content="black"/>
+    <meta name="HandheldFriendly" content="true"/>
+    <meta name="mobile-web-app-capable" content="yes"/>
+    <link rel="stylesheet" type="text/css" href="./src/helpers/style.css">
+    <title>Home Page</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+
+</head>
+<body>
+    
+  <div class="hero"> 
+    <div class="container position-absolute top-50 start-50 translate-middle">
+      <div class="row justify-content-center d-flex">
+        <div class="col-auto flex-column justify-content-center text-center">
+
+    <div class="hero__title text-center">Welcome to Joker4P</div>
+    <div class="cube"></div>
+    <div class="cube"></div>
+    <div class="cube"></div>
+    <div class="cube"></div>
+    <div class="cube"></div>
+    <div class="cube"></div>
+ 
+  
+      <div class="text-center">
+         <img src="./src/images/jokers.png" class="img-fluid" alt="jokers">
+      </div>
+     
+    <div>
+      <form>
+        <div class="input-group mb-3">
+          <span class="input-group-text">Player's Name</span>
+          <input type="text" class="form-control" id="name" required>
+        </div>
+        <div class="input-group mb-3">
+          <span class="input-group-text">Game Name</span>
+          <input type="text" class="form-control" id="roomid" required>
+        </div>
+        <div class="text-center">
+          <button type="button" class="btn btn-success mt-3 px-5" onclick="storeData()" ontouchend="storeData()">Play</button>
+        </div>
+     </form>
+    </div>
+
+    <div class="text-center">
+      <button type="button" class="btn btn-secondary mt-3" onclick="rules()" ontouchend="rules()">Instructions</button>
+    </div>
+  </div>
+     
+  </div> </div></div>
+  <!-- Modal -->
+<div class="modal fade" id="staticBackdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+<div class="modal-dialog">
+<div class="modal-content">
+  <div class="modal-header">
+    <h1 class="modal-title fs-5" id="staticBackdropLabel">Alert</h1>
+  </div>
+  <div class="modal-body">
+    <p>Please fill in all fields!</p>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+  </div>
+</div>
+</div>
+</div>
+
+      <script>
+         function rules(){
+          window.location.href = "instructions.html";
+        }
+        
+        function storeData() {
+          var username = document.getElementById("name").value;
+          var roomid = document.getElementById("roomid").value;
+          
+         // Check for empty fields
+         if (username === "" || roomid === "") {
+            let modal = new bootstrap.Modal(document.getElementById('staticBackdrop'));
+                modal.show();
+                return;
+          }
+          
+          // Store data in session storage
+          sessionStorage.setItem("userName", username);
+          sessionStorage.setItem("roomName", roomid);
+          //sessionStorage.setItem("playNumber", null)
+
+          // Redirect or perform further actions
+          window.location.href = "./src/scenes/joker4p.html";
+        }
+      </script>
+      <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+ 
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    
+    <style>
+    
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            padding: 5px;
+            border-radius: 1em;
+        }
+        
+        button {
+            padding: 5px;
+        }
+        
+        .buttons {
+            text-align: center;
+            padding: 5px;
+        }
+        
+        .remote-video{
+            width: 220px;
+            height: 165px;
+            margin-left: auto;
+            margin-right: auto;
+            display: block;
+        }
+        
+        .local-video{
+            width: 220px;
+            height: 165px;
+            margin-left: auto;
+            margin-right: auto;
+            
+        }
+        
+        
+        </style>
+</head>
+
+<div>
+    <video class="local-video block mirror-mode" id='local' volume="0" preload='none'  muted playsinline disablepictureinpicture></video>
+</div>
+
+<div class="buttons">
+    <button type="button" class="btn btn-secondary btn-sm" id="toggle-video" title="Hide Video">
+        <i class="bi bi-camera-video-fill" id="buttonVideo"></i>
+    </button>
+    <button type="button" class="btn btn-secondary btn-sm" id="toggle-mute" title="Mute">
+        <i class="bi bi-mic-fill" id="buttonAudio"></i>
+    </button>
+</div>
+
+<div class="remote-video" id='videos'></div> 
+        
+  
+         
+    
+    
+
+
+</html>
