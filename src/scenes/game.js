@@ -921,6 +921,7 @@ function init( createOffer, partnerName ) {
   //add
   pc[partnerName].ontrack = ( e ) => {
       let str = e.streams[0];
+      console.log('add stream', str)
       if ( document.getElementById( `${ partnerName }-video` ) ) {
           document.getElementById( `${ partnerName }-video` ).srcObject = str;
       }
@@ -936,7 +937,7 @@ function init( createOffer, partnerName ) {
           videos.append(newVid);
   
           document.getElementById( 'videos' ).appendChild( newVid );
-
+          console.log('new player in town', str)
           //h.adjustVideoElemSize();
       }
   };
