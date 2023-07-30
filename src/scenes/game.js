@@ -859,7 +859,6 @@ socket.on('updateName', (data, playernum) => {
   h.getUserFullMedia().then( ( stream ) => {
       //save my stream
       myStream = stream;
-
       h.setLocalStream( stream );
   } ).catch( ( e ) => {
       console.error( `stream error: ${ e }` );

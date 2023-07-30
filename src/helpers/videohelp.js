@@ -73,11 +73,22 @@ export default {
     },
 
 
-    setLocalStream( stream, mirrorMode = true ) {
-        const localVidElem = document.getElementById( 'local' );
+    setLocalStream(stream, mirrorMode = true) {
+        try {
+          const localVidElem = document.getElementById('local');
+          localVidElem.srcObject = stream;
+          mirrorMode ? localVidElem.classList.add('mirror-mode') : localVidElem.classList.remove('mirror-mode');
+        } catch (error) {
+          console.error('Error setting local stream:', error);
+        }
+      }
+      
 
-        localVidElem.srcObject = stream;
-        mirrorMode ? localVidElem.classList.add( 'mirror-mode' ) : localVidElem.classList.remove( 'mirror-mode' );
-    }
+    // setLocalStream( stream, mirrorMode = true ) {
+    //     const localVidElem = document.getElementById( 'local' );
+    //    console.log('setlocalstream', stream)
+    //     localVidElem.srcObject = stream;
+    //     mirrorMode ? localVidElem.classList.add( 'mirror-mode' ) : localVidElem.classList.remove( 'mirror-mode' );
+    // }
 
 };
