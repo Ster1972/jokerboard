@@ -126,9 +126,25 @@ socket.on( 'newUserStart', ( data ) => {
   init( false, data.sender );
 } );
 
-socket.on( 'ice candidates', async ( data ) => {
-  data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
-} );
+
+
+// socket.on( 'ice candidates', async ( data ) => {
+//   data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
+// } );
+
+socket.on('ice candidates', async (data) => {
+  if (data.candidate) {
+    try {
+      const iceCandidate = new RTCIceCandidate(data.candidate);
+      await pc[data.sender].addIceCandidate(iceCandidate);
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
+    }
+  } else {
+    console.warn('Received empty ICE candidate.');
+  }
+});
+
 
 socket.on('sdp', async (data) => {
   try {
