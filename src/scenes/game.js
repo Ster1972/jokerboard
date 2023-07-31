@@ -145,38 +145,80 @@ socket.on('ice candidates', async (data) => {
   }
 });
 
-
-socket.on('sdp', async (data) => {
+async function handleSDPData(data) {
   try {
     if (data.description.type === 'offer') {
-      if (data.description) {
-        await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
-      }
-
-      const stream = await h.getUserFullMedia();
-      if (!document.getElementById('local').srcObject) {
-        h.setLocalStream(stream);
-      }
-
-      // Save my stream
-      myStream = stream;
-
-      stream.getTracks().forEach((track) => {
-        pc[data.sender].addTrack(track, stream);
-      });
-
-      let answer = await pc[data.sender].createAnswer();
-      await pc[data.sender].setLocalDescription(answer);
-
-      socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+      await handleOffer(data);
     } else if (data.description.type === 'answer') {
-      await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+      await handleAnswer(data);
     }
   } catch (error) {
-    console.error(error);
+    console.error('Error handling SDP data:', error);
     // Handle the error appropriately
   }
-});
+}
+
+async function handleOffer(data) {
+  const remoteDescription = new RTCSessionDescription(data.description);
+  await pc[data.sender].setRemoteDescription(remoteDescription);
+
+  const stream = await h.getUserFullMedia();
+  if (!document.getElementById('local').srcObject) {
+    h.setLocalStream(stream);
+  }
+  
+  myStream = stream;
+  
+  stream.getTracks().forEach((track) => {
+    pc[data.sender].addTrack(track, stream);
+  });
+
+  const answer = await pc[data.sender].createAnswer();
+  await pc[data.sender].setLocalDescription(answer);
+
+  socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+}
+
+async function handleAnswer(data) {
+  const remoteDescription = new RTCSessionDescription(data.description);
+  await pc[data.sender].setRemoteDescription(remoteDescription);
+}
+
+socket.on('sdp', handleSDPData);
+
+
+
+// socket.on('sdp', async (data) => {
+//   try {
+//     if (data.description.type === 'offer') {
+//       if (data.description) {
+//         await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+//       }
+
+//       const stream = await h.getUserFullMedia();
+//       if (!document.getElementById('local').srcObject) {
+//         h.setLocalStream(stream);
+//       }
+
+//       // Save my stream
+//       myStream = stream;
+
+//       stream.getTracks().forEach((track) => {
+//         pc[data.sender].addTrack(track, stream);
+//       });
+
+//       let answer = await pc[data.sender].createAnswer();
+//       await pc[data.sender].setLocalDescription(answer);
+
+//       socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+//     } else if (data.description.type === 'answer') {
+//       await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+//     }
+//   } catch (error) {
+//     console.error(error);
+//     // Handle the error appropriately
+//   }
+// });
 
 
 // socket.on( 'sdp', async ( data ) => {
