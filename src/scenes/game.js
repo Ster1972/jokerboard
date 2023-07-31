@@ -1021,21 +1021,41 @@ function init( createOffer, partnerName ) {
               break;
       }
   };
+
+  function broadcastNewTracks(stream, type, mirrorMode = true) {
+    h.setLocalStream(stream, mirrorMode);
+  
+    if (type !== 'audio' && type !== 'video') {
+      console.error('Invalid type provided. Expected "audio" or "video".');
+      return;
+    }
+  
+    const track = type === 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+  
+    for (const pcInstance of Object.values(pc)) {
+      if (pcInstance) {
+        h.replaceTrack(track, pcInstance);
+      }
+    }
+  }
+  
+
+
 }  // end of function
 
-function broadcastNewTracks( stream, type, mirrorMode = true ) {
-  h.setLocalStream( stream, mirrorMode );
+// function broadcastNewTracks( stream, type, mirrorMode = true ) {
+//   h.setLocalStream( stream, mirrorMode );
 
-  let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+//   let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
 
-  for ( let p in pc ) {
-      let pName = pc[p];
+//   for ( let p in pc ) {
+//       let pName = pc[p];
 
-      if ( typeof pc[pName] == 'object' ) {
-          h.replaceTrack( track, pc[pName] );
-      }
-  }
-}
+//       if ( typeof pc[pName] == 'object' ) {
+//           h.replaceTrack( track, pc[pName] );
+//       }
+//   }
+// }
 
 
 
