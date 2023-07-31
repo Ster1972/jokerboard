@@ -941,36 +941,12 @@ function init( createOffer, partnerName ) {
             newVid.disablePictureInPicture = true;
 
             document.getElementById('videos').appendChild(newVid);
-            console.log('New video element created for', partnerName);
+            console.log('New video element created for', partnerName, pc);
         } else {
             console.error('Received invalid remote stream.');
         }
     }
 };
-
-  // pc[partnerName].ontrack = ( e ) => {
-  //     let str = e.streams[0];
-  //     console.log('old player in town', str, partnerName)
-  //     if ( document.getElementById( `${ partnerName }-video` ) ) {
-  //         document.getElementById( `${ partnerName }-video` ).srcObject = str;
-  //     }
-
-  //     else {
-  //         //video elem
-  //         let newVid = document.createElement( 'video' );
-  //         newVid.id = `${ partnerName }-video`;
-  //         newVid.srcObject = str;
-  //         newVid.className = 'remote-video';
-  //         newVid.autoplay = true;
-  //         newVid.disablePictureInPicture = true;
-  //         videos.append(newVid);
-  
-  //         document.getElementById( 'videos' ).appendChild( newVid );
-  //         console.log('new player in town', str)
-  //         //h.adjustVideoElemSize();
-  //     }
-  // };
-
 
 
   pc[partnerName].onconnectionstatechange = ( d ) => {
