@@ -130,36 +130,69 @@ socket.on( 'ice candidates', async ( data ) => {
   data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
 } );
 
-socket.on( 'sdp', async ( data ) => {
-  if ( data.description.type === 'offer' ) {
-      data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+socket.on('sdp', async (data) => {
+  try {
+    if (data.description.type === 'offer') {
+      if (data.description) {
+        await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+      }
 
-      h.getUserFullMedia().then( async ( stream ) => {
-          if ( !document.getElementById( 'local' ).srcObject ) {
-              h.setLocalStream( stream );
-          }
+      const stream = await h.getUserFullMedia();
+      if (!document.getElementById('local').srcObject) {
+        h.setLocalStream(stream);
+      }
 
-          //save my stream
-          myStream = stream;
+      // Save my stream
+      myStream = stream;
 
-          stream.getTracks().forEach( ( track ) => {
-              pc[data.sender].addTrack( track, stream );
-          } );
+      stream.getTracks().forEach((track) => {
+        pc[data.sender].addTrack(track, stream);
+      });
 
-          let answer = await pc[data.sender].createAnswer();
+      let answer = await pc[data.sender].createAnswer();
+      await pc[data.sender].setLocalDescription(answer);
 
-          await pc[data.sender].setLocalDescription( answer );
-
-          socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id } );
-      } ).catch( ( e ) => {
-          console.error( e );
-      } );
+      socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+    } else if (data.description.type === 'answer') {
+      await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
+    }
+  } catch (error) {
+    console.error(error);
+    // Handle the error appropriately
   }
+});
 
-  else if ( data.description.type === 'answer' ) {
-      await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
-  }
-} );
+
+// socket.on( 'sdp', async ( data ) => {
+//   if ( data.description.type === 'offer' ) {
+//       data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+
+//       h.getUserFullMedia().then( async ( stream ) => {
+//           if ( !document.getElementById( 'local' ).srcObject ) {
+//               h.setLocalStream( stream );
+//           }
+
+//           //save my stream
+//           myStream = stream;
+
+//           stream.getTracks().forEach( ( track ) => {
+//               pc[data.sender].addTrack( track, stream );
+//           } );
+
+//           let answer = await pc[data.sender].createAnswer();
+
+//           await pc[data.sender].setLocalDescription( answer );
+
+//           socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id } );
+//       } ).catch( ( e ) => {
+//           console.error( e );
+//       } );
+//   }
+
+//   else if ( data.description.type === 'answer' ) {
+//       await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
+//   }
+// } );
 
 
 //When the video mute icon is clicked
