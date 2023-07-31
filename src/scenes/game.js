@@ -961,9 +961,29 @@ function init( createOffer, partnerName ) {
 
 
   //send ice candidate to partnerNames
-  pc[partnerName].onicecandidate = ( { candidate } ) => {
-      socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
-  };
+  // Send ICE candidate to the partner
+pc[partnerName].onicecandidate = ({ candidate }) => {
+  try {
+    if (candidate) {
+      const data = {
+        candidate: candidate,
+        to: partnerName,
+        sender: socket.id,
+      };
+      socket.emit('ice candidates', data);
+    } else {
+      console.warn('Empty ICE candidate.');
+    }
+  } catch (error) {
+    console.error('Error sending ICE candidate:', error);
+  }
+};
+
+
+
+  // pc[partnerName].onicecandidate = ( { candidate } ) => {
+  //     socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
+  // };
 
 
 

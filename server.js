@@ -61,13 +61,45 @@ io.on("connection", (socket) => {
           socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
       } );
 
-      socket.on( 'sdp', ( data ) => {
-          socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
-      } );
+      socket.on('sdp', (data) => {
+        try {
+          if (data.description && data.to && data.sender) {
+            socket.broadcast.to(data.to).emit('sdp', {
+              description: data.description,
+              sender: data.sender,
+            });
+          } else {
+            console.warn('Invalid SDP data received.');
+          }
+        } catch (error) {
+          console.error('Error relaying SDP data:', error);
+        }
+      });
+      
 
-      socket.on( 'ice candidates', ( data ) => {
-          socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
-      } );
+      // socket.on( 'sdp', ( data ) => {
+      //     socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
+      // } );
+
+      socket.on('ice candidates', (data) => {
+        try {
+          if (data.candidate && data.to && data.sender) {
+            socket.broadcast.to(data.to).emit('ice candidates', {
+              candidate: data.candidate,
+              sender: data.sender,
+            });
+          } else {
+            console.warn('Invalid ICE candidate data received.');
+          }
+        } catch (error) {
+          console.error('Error relaying ICE candidate:', error);
+        }
+      });
+      
+
+      // socket.on( 'ice candidates', ( data ) => {
+      //     socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
+      // } );
 
       // ************ END OF WEBRTC Stuff  ********************
 
