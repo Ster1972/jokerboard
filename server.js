@@ -77,9 +77,7 @@ io.on("connection", (socket) => {
       });
       
 
-      // socket.on( 'sdp', ( data ) => {
-      //     socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
-      // } );
+
 
       socket.on('ice candidates', (data) => {
         try {
@@ -97,9 +95,7 @@ io.on("connection", (socket) => {
       });
       
 
-      // socket.on( 'ice candidates', ( data ) => {
-      //     socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
-      // } );
+      
 
       // ************ END OF WEBRTC Stuff  ********************
 
