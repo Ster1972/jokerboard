@@ -133,6 +133,7 @@ socket.on( 'newUserStart', ( data ) => {
 // } );
 
 socket.on('ice candidates', async (data) => {
+  console.log('ice candidates', data)
   if (data.candidate) {
     try {
       const iceCandidate = new RTCIceCandidate(data.candidate);
@@ -1000,9 +1001,6 @@ function init( createOffer, partnerName ) {
       };
   }
 
-
-
-  //send ice candidate to partnerNames
   // Send ICE candidate to the partner
 pc[partnerName].onicecandidate = ({ candidate }) => {
   try {
@@ -1013,8 +1011,9 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
         sender: socket.id,
       };
       socket.emit('ice candidates', data);
+      console.log("sending ice candidate to server", data)
     } else {
-      console.warn('Empty ICE candidate.');
+      console.warn('Empty ICE candidate.', candidate);
     }
   } catch (error) {
     console.error('Error sending ICE candidate:', error);

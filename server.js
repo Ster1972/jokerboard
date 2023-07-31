@@ -80,6 +80,7 @@ io.on("connection", (socket) => {
 
 
       socket.on('ice candidates', (data) => {
+        console.log('ice candidate', data)
         try {
           if (data.candidate && data.to && data.sender) {
             socket.broadcast.to(data.to).emit('ice candidates', {
