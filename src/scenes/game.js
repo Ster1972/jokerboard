@@ -128,7 +128,7 @@ socket.on( 'newUserStart', ( data ) => {
 
 
 socket.on('ice candidates', async (data) => {
-  console.log('ice candidates', data)
+  console.log('ice candidates recieved from server', data)
   if (data.candidate) {
     try {
       const iceCandidate = new RTCIceCandidate(data.candidate);
@@ -1048,14 +1048,6 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
     console.error('Error sending ICE candidate:', error);
   }
 };
-
-
-
-  // pc[partnerName].onicecandidate = ( { candidate } ) => {
-  //     socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
-  // };
-
-
 
   //add
   pc[partnerName].ontrack = (e) => {
