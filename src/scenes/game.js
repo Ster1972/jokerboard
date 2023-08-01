@@ -979,15 +979,41 @@ function init( createOffer, partnerName ) {
 
 
   //create offer
-  if ( createOffer ) {
-      pc[partnerName].onnegotiationneeded = async () => {
-          let offer = await pc[partnerName].createOffer();
+// Create a separate async function to handle the offer creation and sending
+async function createAndSendOffer(pc, partnerName, socket) {
+  try {
+    const offer = await pc[partnerName].createOffer();
+    await pc[partnerName].setLocalDescription(offer);
 
-          await pc[partnerName].setLocalDescription( offer );
-
-          socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socket.id } );
-      };
+    const sdpData = {
+      description: pc[partnerName].localDescription,
+      to: partnerName,
+      sender: socket.id,
+    };
+    socket.emit('sdp', sdpData);
+  } catch (error) {
+    // Handle any errors that may occur during offer creation or sending
+    console.error('Error creating and sending offer:', error);
   }
+}
+
+// Check if the 'createOffer' flag is truthy, then call the function
+if (createOffer) {
+  pc[partnerName].onnegotiationneeded = async () => {
+    await createAndSendOffer(pc, partnerName, socket);
+  };
+}
+
+
+  // if ( createOffer ) {
+  //     pc[partnerName].onnegotiationneeded = async () => {
+  //         let offer = await pc[partnerName].createOffer();
+
+  //         await pc[partnerName].setLocalDescription( offer );
+
+  //         socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socket.id } );
+  //     };
+  // }
 
   // Send ICE candidate to the partner
 pc[partnerName].onicecandidate = ({ candidate }) => {
