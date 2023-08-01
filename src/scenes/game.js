@@ -127,11 +127,6 @@ socket.on( 'newUserStart', ( data ) => {
 } );
 
 
-
-// socket.on( 'ice candidates', async ( data ) => {
-//   data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
-// } );
-
 socket.on('ice candidates', async (data) => {
   console.log('ice candidates', data)
   if (data.candidate) {
@@ -157,28 +152,58 @@ async function handleSDPData(data) {
     console.error('Error handling SDP data:', error);
     // Handle the error appropriately
   }
-}
+};
 
 async function handleOffer(data) {
-  const remoteDescription = new RTCSessionDescription(data.description);
-  await pc[data.sender].setRemoteDescription(remoteDescription);
+  try {
+    const remoteDescription = new RTCSessionDescription(data.description);
+    await pc[data.sender].setRemoteDescription(remoteDescription);
 
-  const stream = await h.getUserFullMedia();
-  if (!document.getElementById('local').srcObject) {
-    h.setLocalStream(stream);
+    // Ensure we have a local stream before proceeding
+    if (!document.getElementById('local').srcObject) {
+      const localStream = await h.getUserFullMedia();
+      h.setLocalStream(localStream);
+    }
+
+    // Update myStream to use the local stream
+    myStream = document.getElementById('local').srcObject;
+
+    // Add the local tracks to the peer connection
+    myStream.getTracks().forEach((track) => {
+      pc[data.sender].addTrack(track, myStream);
+    });
+
+    // Create an answer and set it as the local description
+    const answer = await pc[data.sender].createAnswer();
+    await pc[data.sender].setLocalDescription(answer);
+
+    // Send the answer as the local description via socket
+    socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+  } catch (error) {
+    console.error('Error handling offer:', error);
   }
-  
-  myStream = stream;
-  
-  stream.getTracks().forEach((track) => {
-    pc[data.sender].addTrack(track, stream);
-  });
-
-  const answer = await pc[data.sender].createAnswer();
-  await pc[data.sender].setLocalDescription(answer);
-
-  socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
 }
+
+// async function handleOffer(data) {
+//   const remoteDescription = new RTCSessionDescription(data.description);
+//   await pc[data.sender].setRemoteDescription(remoteDescription);
+
+//   const stream = await h.getUserFullMedia();
+//   if (!document.getElementById('local').srcObject) {
+//     h.setLocalStream(stream);
+//   }
+  
+//   myStream = stream;
+  
+//   stream.getTracks().forEach((track) => {
+//     pc[data.sender].addTrack(track, stream);
+//   });
+
+//   const answer = await pc[data.sender].createAnswer();
+//   await pc[data.sender].setLocalDescription(answer);
+
+//   socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
+// }
 
 async function handleAnswer(data) {
   const remoteDescription = new RTCSessionDescription(data.description);
@@ -1004,16 +1029,6 @@ if (createOffer) {
   };
 }
 
-
-  // if ( createOffer ) {
-  //     pc[partnerName].onnegotiationneeded = async () => {
-  //         let offer = await pc[partnerName].createOffer();
-
-  //         await pc[partnerName].setLocalDescription( offer );
-
-  //         socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socket.id } );
-  //     };
-  // }
 
   // Send ICE candidate to the partner
 pc[partnerName].onicecandidate = ({ candidate }) => {
