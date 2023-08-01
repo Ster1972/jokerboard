@@ -80,7 +80,6 @@ io.on("connection", (socket) => {
 
 
       socket.on('ice candidates', (data) => {
-        console.log('ice candidate', data)
         try {
           if (data.candidate && data.to && data.sender) {
             socket.broadcast.to(data.to).emit('ice candidates', {
@@ -156,9 +155,9 @@ io.on("connection", (socket) => {
       //console.log('user DB', users)
       //const info = users.filter((e) => e.id === socket.id) //get player info
       const index = users.findIndex((e) => e.id === id); //get index of user disconnected
-      console.log('users data', index, users[index])
+      //console.log('users data', index, users[index])
       users[index].player = data
-      console.log('update data', users[index],roomName)
+     // console.log('update data', users[index],roomName)
       socket.to(roomName).emit('updateName', data, playernum)
     })
 

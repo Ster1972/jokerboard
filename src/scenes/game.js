@@ -128,7 +128,6 @@ socket.on( 'newUserStart', ( data ) => {
 
 
 socket.on('ice candidates', async (data) => {
-  console.log('ice candidates recieved from server', data)
   if (data.candidate) {
     try {
       const iceCandidate = new RTCIceCandidate(data.candidate);
@@ -184,27 +183,6 @@ async function handleOffer(data) {
   }
 }
 
-// async function handleOffer(data) {
-//   const remoteDescription = new RTCSessionDescription(data.description);
-//   await pc[data.sender].setRemoteDescription(remoteDescription);
-
-//   const stream = await h.getUserFullMedia();
-//   if (!document.getElementById('local').srcObject) {
-//     h.setLocalStream(stream);
-//   }
-  
-//   myStream = stream;
-  
-//   stream.getTracks().forEach((track) => {
-//     pc[data.sender].addTrack(track, stream);
-//   });
-
-//   const answer = await pc[data.sender].createAnswer();
-//   await pc[data.sender].setLocalDescription(answer);
-
-//   socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
-// }
-
 async function handleAnswer(data) {
   const remoteDescription = new RTCSessionDescription(data.description);
   await pc[data.sender].setRemoteDescription(remoteDescription);
@@ -212,75 +190,7 @@ async function handleAnswer(data) {
 
 socket.on('sdp', handleSDPData);
 
-
-
-// socket.on('sdp', async (data) => {
-//   try {
-//     if (data.description.type === 'offer') {
-//       if (data.description) {
-//         await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
-//       }
-
-//       const stream = await h.getUserFullMedia();
-//       if (!document.getElementById('local').srcObject) {
-//         h.setLocalStream(stream);
-//       }
-
-//       // Save my stream
-//       myStream = stream;
-
-//       stream.getTracks().forEach((track) => {
-//         pc[data.sender].addTrack(track, stream);
-//       });
-
-//       let answer = await pc[data.sender].createAnswer();
-//       await pc[data.sender].setLocalDescription(answer);
-
-//       socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
-//     } else if (data.description.type === 'answer') {
-//       await pc[data.sender].setRemoteDescription(new RTCSessionDescription(data.description));
-//     }
-//   } catch (error) {
-//     console.error(error);
-//     // Handle the error appropriately
-//   }
-// });
-
-
-// socket.on( 'sdp', async ( data ) => {
-//   if ( data.description.type === 'offer' ) {
-//       data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
-
-//       h.getUserFullMedia().then( async ( stream ) => {
-//           if ( !document.getElementById( 'local' ).srcObject ) {
-//               h.setLocalStream( stream );
-//           }
-
-//           //save my stream
-//           myStream = stream;
-
-//           stream.getTracks().forEach( ( track ) => {
-//               pc[data.sender].addTrack( track, stream );
-//           } );
-
-//           let answer = await pc[data.sender].createAnswer();
-
-//           await pc[data.sender].setLocalDescription( answer );
-
-//           socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id } );
-//       } ).catch( ( e ) => {
-//           console.error( e );
-//       } );
-//   }
-
-//   else if ( data.description.type === 'answer' ) {
-//       await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
-//   }
-// } );
-
-
 //When the video mute icon is clicked
-
 document.getElementById('toggle-video').addEventListener('click', (e) => {
   e.preventDefault();
 
@@ -301,13 +211,7 @@ document.getElementById('toggle-video').addEventListener('click', (e) => {
   }
 });
 
-
-
-
 //When the audio mute icon is clicked
-
-
-
 document.getElementById('toggle-mute').addEventListener('click', (e) => {
   e.preventDefault();
   const iconAudio = document.getElementById('buttonAudio');
@@ -1004,8 +908,8 @@ function init( createOffer, partnerName ) {
 
 
   //create offer
-// Create a separate async function to handle the offer creation and sending
-async function createAndSendOffer(pc, partnerName, socket) {
+ // Create a separate async function to handle the offer creation and sending
+ async function createAndSendOffer(pc, partnerName, socket) {
   try {
     const offer = await pc[partnerName].createOffer();
     await pc[partnerName].setLocalDescription(offer);
@@ -1050,35 +954,44 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
 };
 
   //add
-  pc[partnerName].ontrack = (e) => {
-    let remoteStream = e.streams[0];
+  pc[partnerName].ontrack = (event) => {
+    const remoteStream = event.streams[0];
     console.log('Received remote stream:', remoteStream);
 
-    if (document.getElementById(`${partnerName}-video`)) {
-        // Video element exists, update the source if the stream is valid
-        if (remoteStream && remoteStream.getTracks().length > 0) {
-            document.getElementById(`${partnerName}-video`).srcObject = remoteStream;
+    const partnerVideoElementId = `${partnerName}-video`;
+    const existingVideoElement = document.getElementById(partnerVideoElementId);
+
+    if (remoteStreamIsValid(remoteStream)) {
+        if (existingVideoElement) {
+            existingVideoElement.srcObject = remoteStream;
         } else {
-            console.error('Received invalid remote stream.');
+            createAndAddVideoElement(partnerName, remoteStream);
         }
     } else {
-        // Video element does not exist, create and add it to the page
-        if (remoteStream && remoteStream.getTracks().length > 0) {
-            let newVid = document.createElement('video');
-            newVid.id = `${partnerName}-video`;
-            newVid.srcObject = remoteStream;
-            newVid.className = 'remote-video';
-            newVid.autoplay = true;
-            newVid.disablePictureInPicture = true;
-
-            document.getElementById('videos').appendChild(newVid);
-            console.log('New video element created for', partnerName, pc);
-        } else {
-            console.error('Received invalid remote stream.');
-        }
+        handleError('Received invalid remote stream.');
     }
 };
 
+function remoteStreamIsValid(stream) {
+    return stream && stream.getTracks().length > 0;
+}
+
+function createAndAddVideoElement(partnerName, remoteStream) {
+    const newVid = document.createElement('video');
+    newVid.id = `${partnerName}-video`;
+    newVid.srcObject = remoteStream;
+    newVid.className = 'remote-video mirror-mode';
+    newVid.autoplay = true;
+    newVid.disablePictureInPicture = true;
+
+    document.getElementById('videos').appendChild(newVid);
+    console.log('New video element created for', partnerName, pc);
+}
+
+function handleError(errorMessage) {
+    // Handle the error more gracefully, e.g., show a user-friendly message to the user
+    throw new Error(errorMessage);
+}
 
   pc[partnerName].onconnectionstatechange = ( d ) => {
       switch ( pc[partnerName].iceConnectionState ) {
@@ -1107,16 +1020,13 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
 }  // end of function
 
 
-function broadcastNewTracks(stream, type, mirrorMode = true) {
-  h.setLocalStream(stream, mirrorMode);
-
+function broadcastNewTracks(stream, type, mirrorMode) {
+  h.setLocalStream(stream, mirrorMode = true);
   if (type !== 'audio' && type !== 'video') {
     console.error('Invalid type provided. Expected "audio" or "video".');
     return;
   }
-
   const track = type === 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
-
   for (const pcInstance of Object.values(pc)) {
     if (pcInstance) {
       h.replaceTrack(track, pcInstance);
