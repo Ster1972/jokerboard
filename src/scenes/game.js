@@ -877,35 +877,28 @@ socket.on('updateName', (data, playernum) => {
 function init( createOffer, partnerName ) {
   console.log("init- create offer",partnerName)
   pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
-
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
       } );
   }
-
   else if ( myStream ) {
       myStream.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, myStream );//should trigger negotiationneeded event
       } );
   }
-
   else {
       h.getUserFullMedia().then( ( stream ) => {
           //save my stream
           myStream = stream;
-
           stream.getTracks().forEach( ( track ) => {
               pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
           } );
-
           h.setLocalStream( stream );
       } ).catch( ( e ) => {
           console.error( `stream error: ${ e }` );
       } );
   }
-
-
 
   //create offer
  // Create a separate async function to handle the offer creation and sending
@@ -913,7 +906,6 @@ function init( createOffer, partnerName ) {
   try {
     const offer = await pc[partnerName].createOffer();
     await pc[partnerName].setLocalDescription(offer);
-
     const sdpData = {
       description: pc[partnerName].localDescription,
       to: partnerName,
