@@ -256,64 +256,52 @@ socket.on('sdp', handleSDPData);
 
 //When the video mute icon is clicked
 
-document.getElementById('toggle-video').addEventListener('click', (e) => {e.preventDefault();
+document.getElementById('toggle-video').addEventListener('click', (e) => {
+  e.preventDefault();
 
-  let iconVideo = document.getElementById('buttonVideo')
-  if (myStream.getVideoTracks()[0].enabled){
-    if (e.target.classList.contains('btn-secondary')){
-    iconVideo.className = 'bi bi-camera-video-off-fill'
-    myStream.getVideoTracks()[0].enabled = false;
+  let iconVideo = document.getElementById('buttonVideo');
+  let videoTrack = myStream.getVideoTracks()[0];
+  if (videoTrack) {
+    if (videoTrack.enabled) {
+      iconVideo.classList.remove('bi-camera-video-fill');
+      iconVideo.classList.add('bi-camera-video-off-fill');
+      videoTrack.enabled = false; // Mute the video
+    } else {
+      iconVideo.classList.remove('bi-camera-video-off-fill');
+      iconVideo.classList.add('bi-camera-video-fill');
+      videoTrack.enabled = true; // Unmute the video
     }
-    else if (e.target.classList.contains('bi-camera-video-fill') || e.target.classList.contains('btn-secondary')){
-      e.target.classList.remove('bi-camera-video-fill');
-      e.target.classList.add('bi-camera-video-off-fill');
-      myStream.getVideoTracks()[0].enabled = false;
-      }
-    }
-  else {
-    if (e.target.classList.contains('btn-secondary')){
-        iconVideo.className = 'bi bi-camera-video-fill'
-        myStream.getVideoTracks()[0].enabled = true;
-    }
-    else if(e.target.classList.contains('bi-camera-video-off-fill') || e.target.classList.contains('btn-secondary')){
-        e.target.classList.remove('bi-camera-video-off-fill');
-        e.target.classList.add('bi-camera-video-fill');
-        myStream.getVideoTracks()[0].enabled = true;
-    }
+
+    broadcastNewTracks(myStream, 'video');
   }
-broadcastNewTracks(myStream, 'video')
+});
 
-})
+
 
 
 //When the audio mute icon is clicked
+
+
+
 document.getElementById('toggle-mute').addEventListener('click', (e) => {
-e.preventDefault();
-let iconAudio = document.getElementById('buttonAudio')
-  if (myStream.getAudioTracks()[0].enabled){
-    if (e.target.classList.contains('btn-secondary')){
-      iconAudio.className = 'bi bi-mic-mute-fill'
-      myStream.getAudioTracks()[0].enabled = false;
+  e.preventDefault();
+  const iconAudio = document.getElementById('buttonAudio');
+  const audioTrack = myStream.getAudioTracks()[0];
+
+  if (audioTrack) {
+    if (audioTrack.enabled) {
+      iconAudio.classList.remove('bi-mic-fill');
+      iconAudio.classList.add('bi-mic-mute-fill');
+    } else {
+      iconAudio.classList.remove('bi-mic-mute-fill');
+      iconAudio.classList.add('bi-mic-fill');
     }
-    else if (e.target.classList.contains('bi-mic-fill')){
-      e.target.classList.remove('bi-mic-fill');
-      e.target.classList.add('bi-mic-mute-fill');
-      myStream.getAudioTracks()[0].enabled = false;
-      }
+
+    audioTrack.enabled = !audioTrack.enabled; // Toggle the audio state (mute/unmute)
+    broadcastNewTracks(myStream, 'audio');
   }
-  else {
-    if (e.target.classList.contains('btn-secondary')){
-        iconAudio.className = 'bi bi-mic-fill'
-        myStream.getAudioTracks()[0].enabled = true;
-    }
-    else if(e.target.classList.contains('bi-mic-mute-fill')){
-        e.target.classList.remove('bi-mic-mute-fill');
-        e.target.classList.add('bi-mic-fill');
-        myStream.getAudioTracks()[0].enabled = true;
-    }
-  }
-broadcastNewTracks(myStream, 'audio')
 });
+
 
 socket.on('user-disconnected', (userId, playernum) => {
   console.log('user disconnected', userId, playernum, typeof playernum)
@@ -1083,40 +1071,27 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
       }
   };
 
-  function broadcastNewTracks(stream, type, mirrorMode = true) {
-    h.setLocalStream(stream, mirrorMode);
-  
-    if (type !== 'audio' && type !== 'video') {
-      console.error('Invalid type provided. Expected "audio" or "video".');
-      return;
-    }
-  
-    const track = type === 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
-  
-    for (const pcInstance of Object.values(pc)) {
-      if (pcInstance) {
-        h.replaceTrack(track, pcInstance);
-      }
-    }
-  }
-  
-
-
 }  // end of function
 
-// function broadcastNewTracks( stream, type, mirrorMode = true ) {
-//   h.setLocalStream( stream, mirrorMode );
 
-//   let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+function broadcastNewTracks(stream, type, mirrorMode = true) {
+  h.setLocalStream(stream, mirrorMode);
 
-//   for ( let p in pc ) {
-//       let pName = pc[p];
+  if (type !== 'audio' && type !== 'video') {
+    console.error('Invalid type provided. Expected "audio" or "video".');
+    return;
+  }
 
-//       if ( typeof pc[pName] == 'object' ) {
-//           h.replaceTrack( track, pc[pName] );
-//       }
-//   }
-// }
+  const track = type === 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+
+  for (const pcInstance of Object.values(pc)) {
+    if (pcInstance) {
+      h.replaceTrack(track, pcInstance);
+    }
+  }
+}
+
+
 
 
 
