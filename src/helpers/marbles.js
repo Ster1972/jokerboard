@@ -10,8 +10,6 @@ const socket = io({ transports: ["websocket"] });
   }
   
   let yellowBlueMarbles = (obj, playersmarble) => {
-    //console.log('yellowBlue Marble FUNCTION: ', obj.frame.name, playersmarble.frame.name)
-
     const bhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], RightHome)
     const bhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], RightHome)
     const bhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome)
@@ -75,8 +73,6 @@ const socket = io({ transports: ["websocket"] });
   } // end of yellowBlueMarbles
 
   let greenRedMarbles = (obj, playersmarble) => {
-    //console.log('yellowBlue Marble FUNCTION: ', obj.frame.name, playersmarble.frame.name)
-
     const rhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], BottomHome)
     const rhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], BottomHome)
     const rhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], BottomHome)
@@ -115,7 +111,6 @@ const socket = io({ transports: ["websocket"] });
           } else if (obj.frame.name === 'r' && playersmarble.frame.name === 'g') {
                       // Check to see if red home is occupied, if so move marble
                       if (ghfWithRed) {
-                          // console.log('gh occupied with red marble')
                           this.physics.world.overlap([b1, b2, b3, b4, b5], TopHome, move_partners_Marble)
                           this.physics.world.overlap([r1, r2, r3, r4, r5], BottomHome, move_opponets_Marble)
                           this.physics.world.overlap([l1, l2, l3, l4, l5], BottomHome, move_opponets_Marble)

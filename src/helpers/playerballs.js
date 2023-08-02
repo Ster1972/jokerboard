@@ -2,8 +2,6 @@
 
 export default function playerMarble(obj,x,y,texture,frame,data){
     
-    
-    //console.log('success',obj)
     let balldata = {'t1': { ballname: 'top1', X: 370, Y: 100, homeX: 170, homeY: 50 },
                     't2': { ballname: 'top2', X: 370, Y: 140, homeX: 170, homeY: 50 },
                     't3': { ballname: 'top3', X: 370, Y: 180, homeX: 170, homeY: 50 },

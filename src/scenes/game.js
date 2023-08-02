@@ -46,7 +46,7 @@ export default class Game extends Phaser.Scene {
     let c2 = this.add.circle(1005, 105, 11, 0x000000)
     let c3 = this.add.circle(1035, 105, 11, 0x000000)
     let c4 = this.add.circle(1065, 105, 11, 0x000000)
-    console.log("session storage for Username =", userName, roomName, playerNum)
+    //console.log("session storage for Username =", userName, roomName, playerNum)
 
     const socket = io({ transports: ["websocket"] });
 
@@ -233,7 +233,7 @@ document.getElementById('toggle-mute').addEventListener('click', (e) => {
 
 
 socket.on('user-disconnected', (userId, playernum) => {
-  console.log('user disconnected', userId, playernum, typeof playernum)
+  //console.log('user disconnected', userId, playernum)
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
       if(playernum === '1') {
@@ -253,7 +253,6 @@ socket.on('user-disconnected', (userId, playernum) => {
 })
 
 socket.on('updateName', (data, playernum) => {
-  console.log('update the name on board', data, playernum, typeof playernum)
   if (playernum === 1){
     sessionStorage.setItem('playerName1', data)
     playerName1Text.text = data;
@@ -875,7 +874,7 @@ socket.on('updateName', (data, playernum) => {
 }
 
 function init( createOffer, partnerName ) {
-  console.log("init- create offer",partnerName)
+  //console.log("init- create offer",partnerName)
   pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
@@ -936,7 +935,7 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
         sender: socket.id,
       };
       socket.emit('ice candidates', data);
-      console.log("sending ice candidate to server", data)
+      //console.log("sending ice candidate to server", data)
     } else {
       console.warn('Empty ICE candidate.', candidate);
     }
@@ -948,7 +947,7 @@ pc[partnerName].onicecandidate = ({ candidate }) => {
   //add
   pc[partnerName].ontrack = (event) => {
     const remoteStream = event.streams[0];
-    console.log('Received remote stream:', remoteStream);
+    //console.log('Received remote stream:', remoteStream);
 
     const partnerVideoElementId = `${partnerName}-video`;
     const existingVideoElement = document.getElementById(partnerVideoElementId);
@@ -975,9 +974,7 @@ function createAndAddVideoElement(partnerName, remoteStream) {
     newVid.className = 'remote-video mirror-mode';
     newVid.autoplay = true;
     newVid.disablePictureInPicture = true;
-
     document.getElementById('videos').appendChild(newVid);
-    console.log('New video element created for', partnerName, pc);
 }
 
 function handleError(errorMessage) {
