@@ -36,6 +36,7 @@ io.on("connection", (socket) => {
    
     if (getClientCount(roomName) > 1 && getClientCount(roomName) <= 4 ){
       socket.to(roomName).emit('new user', {socketId: socket.id});
+      console.log('new video user has joined', socket.id )
     }
     if (getClientCount(roomName) > 4){
       console.log('too many players detected',getClientCount(roomName)  )
@@ -64,7 +65,7 @@ io.on("connection", (socket) => {
       socket.on('sdp', (data) => {
         try {
           if (data.description && data.to && data.sender) {
-            socket.broadcast.to(data.to).emit('sdp', {
+            socket.to(data.to).emit('sdp', {
               description: data.description,
               sender: data.sender,
             });
@@ -82,7 +83,7 @@ io.on("connection", (socket) => {
       socket.on('ice candidates', (data) => {
         try {
           if (data.candidate && data.to && data.sender) {
-            socket.broadcast.to(data.to).emit('ice candidates', {
+            socket.to(data.to).emit('ice candidates', {
               candidate: data.candidate,
               sender: data.sender,
             });
