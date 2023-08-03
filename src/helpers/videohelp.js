@@ -29,11 +29,27 @@ export default {
     getIceServer() {
         return {
             iceservers: [
-                {urls: "stun:stun.l.google.com:19302",},
-                {urls: "stun:stun1.l.google.com:19302",},
-                {urls: "stun:stun2.l.google.com:19302",},
-                {urls: "stun:stun3.l.google.com:19302",},
-                {urls: "stun:stun4.l.google.com:19302",},
+                
+                {
+                    username: "n8k7T74KxBy_BoK6SeLI4DBDbRI2E1NMg14iKZK4K6WPA0zD-Mcs4Yzc4B66N9JeAAAAAGCgXB1zdHJlZXRlcmI=",
+                    credential: "a71eec68-3191-11ee-88c1-0242ac150006",
+                    urls: [
+                        "stun:stun.l.google.com:19302",
+                        "stun:stun1.l.google.com:19302",
+                        "stun:stun2.l.google.com:19302",
+                        "stun:stun3.l.google.com:19302",
+                        "stun:stun4.l.google.com:19302",
+                        "stun:us-turn12.xirsys.com",
+
+                        "turn:us-turn12.xirsys.com:80?transport=udp",
+                        "turn:us-turn12.xirsys.com:3478?transport=udp",
+                        "turn:us-turn12.xirsys.com:80?transport=tcp",
+                        "turn:us-turn12.xirsys.com:3478?transport=tcp",
+                        "turns:us-turn12.xirsys.com:443?transport=tcp",
+                        "turns:us-turn12.xirsys.com:5349?transport=tcp",
+                        
+                    ]
+                }
             ]
         }
 
