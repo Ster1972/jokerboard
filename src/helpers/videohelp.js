@@ -34,7 +34,7 @@ export default {
                 },
                 {
                     username: "n8k7T74KxBy_BoK6SeLI4DBDbRI2E1NMg14iKZK4K6WPA0zD-Mcs4Yzc4B66N9JeAAAAAGCgXB1zdHJlZXRlcmI=",
-                    credential: "0b400954-b5d7-11eb-99a8-0242ac120004",
+                    credential: "a71eec68-3191-11ee-88c1-0242ac150006",
                     urls: [
                         "turn:us-turn12.xirsys.com:80?transport=udp",
                         "turn:us-turn12.xirsys.com:3478?transport=udp",

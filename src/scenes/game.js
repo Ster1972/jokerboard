@@ -118,14 +118,14 @@ export default class Game extends Phaser.Scene {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
   pc.push( data.socketId );
   console.log('new user log', pc)
-  init( true, data.socketId );
+  init( true, data.socketId );  // create offer
 } );
 
 
 socket.on( 'newUserStart', ( data ) => {
   pc.push( data.sender );
   console.log('*** new User start ***', pc)
-  init( false, data.sender );
+  init( false, data.sender ); // don't create offer
 } );
 
 
