@@ -78,8 +78,6 @@ io.on("connection", (socket) => {
       });
       
 
-
-
       socket.on('ice candidates', (data) => {
         try {
           if (data.candidate && data.to && data.sender) {

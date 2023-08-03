@@ -41,7 +41,12 @@ export default {
                         "turn:us-turn12.xirsys.com:80?transport=tcp",
                         "turn:us-turn12.xirsys.com:3478?transport=tcp",
                         "turns:us-turn12.xirsys.com:443?transport=tcp",
-                        "turns:us-turn12.xirsys.com:5349?transport=tcp"
+                        "turns:us-turn12.xirsys.com:5349?transport=tcp",
+                        "stun.l.google.com:19302",
+                        "stun1.l.google.com:19302",
+                        "stun2.l.google.com:19302",
+                        "stun3.l.google.com:19302",
+                        "stun4.l.google.com:19302"
                     ]
                 }
             ]
