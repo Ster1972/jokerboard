@@ -1,4 +1,4 @@
-"use strict"
+
 
 export default class Modal extends Phaser.GameObjects.Container {
     constructor(scene, x, y, width, height, message, socket) {

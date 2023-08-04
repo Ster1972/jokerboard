@@ -1,4 +1,4 @@
-"use strict"
+
 // h1 is the gray hole
 // h2 is the black hole
 

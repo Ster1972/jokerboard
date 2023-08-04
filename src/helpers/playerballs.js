@@ -1,4 +1,4 @@
-"use strict"
+
 
 export default function playerMarble(obj,x,y,texture,frame,data){
     

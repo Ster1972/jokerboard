@@ -1,4 +1,4 @@
-"use strict";
+
 import playerMarble from "../helpers/playerballs.js";
 import boardHole from "../helpers/boardholes.js";
 import Modal from "../helpers/modal.js"
