@@ -128,19 +128,41 @@ socket.on( 'newUserStart', ( data ) => {
   init( false, data.sender ); // don't create offer
 } );
 
-
 socket.on('ice candidates', async (data) => {
   if (data.candidate) {
-    try {
-      const iceCandidate = new RTCIceCandidate(data.candidate);
-      await pc[data.sender].addIceCandidate(iceCandidate);
-    } catch (error) {
-      console.error('Error adding ICE candidate:', error);
+    let retryAttempts = 3; // Number of retry attempts
+    let success = false;
+
+    while (retryAttempts > 0 && !success) {
+      try {
+        const iceCandidate = new RTCIceCandidate(data.candidate);
+        await pc[data.sender].addIceCandidate(iceCandidate);
+        success = true;
+      } catch (error) {
+        console.error('Error adding ICE candidate:', error);
+        retryAttempts--;
+        if (retryAttempts === 0) {
+          console.error('Max retry attempts reached. Could not add ICE candidate.');
+        }
+      }
     }
   } else {
     console.warn('Received empty ICE candidate.');
   }
 });
+
+// socket.on('ice candidates', async (data) => {
+//   if (data.candidate) {
+//     try {
+//       const iceCandidate = new RTCIceCandidate(data.candidate);
+//       await pc[data.sender].addIceCandidate(iceCandidate);
+//     } catch (error) {
+//       console.error('Error adding ICE candidate:', error);
+//     }
+//   } else {
+//     console.warn('Received empty ICE candidate.');
+//   }
+// });
 
 async function handleSDPData(data) {
   try {
