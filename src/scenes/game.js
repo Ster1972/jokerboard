@@ -889,7 +889,7 @@ socket.on('updateName', (data, playernum) => {
 
 function init( createOffer, partnerName ) {
   //console.log("init- create offer",partnerName)
-  pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
+  pc[partnerName] = new RTCPeerConnection( getIceServer() );
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
@@ -929,6 +929,21 @@ function init( createOffer, partnerName ) {
     // Handle any errors that may occur during offer creation or sending
     console.error('Error creating and sending offer:', error);
   }
+}
+
+async function getIceServer() {
+  return new Promise((resolve, reject) => {
+    socket.emit("getIceList");
+
+    socket.once("iceList", (data) => {
+      resolve(data.iceList);
+    });
+
+    socket.once("error", (error) => {
+      console.error("ICE List request error:", error);
+      reject(error);
+    });
+  });
 }
 
 // Check if the 'createOffer' flag is truthy, then call the function

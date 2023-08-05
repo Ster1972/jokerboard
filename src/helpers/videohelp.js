@@ -26,46 +26,6 @@ export default {
         }
     },
 
-
-    
-
-
-
-    getIceServer() {
-        return {
-            iceServers: [{   urls: [ "stun:us-turn9.xirsys.com" ]}, {   username: "c79KMEtlT1bDR4dwFvol9dPgUJepSI5MrekOwoZL5NE__4gWpLRpBn4ffW7yGp5tAAAAAGD9telqb2tlcnZpZGVv",   credential: "3db37f8e-ed7b-11eb-b854-0242ac140004",   urls: [       "turn:us-turn9.xirsys.com:80?transport=udp",       "turn:us-turn9.xirsys.com:3478?transport=udp",       "turn:us-turn9.xirsys.com:80?transport=tcp",       "turn:us-turn9.xirsys.com:3478?transport=tcp",       "turns:us-turn9.xirsys.com:443?transport=tcp",       "turns:us-turn9.xirsys.com:5349?transport=tcp"   ]}]
-
-        }
-
-    },
-
-    // getIceServer() {
-    //     return {
-    //         iceServers: [
-    //             {
-    //                 urls: ["stun:us-turn12.xirsys.com"]
-    //             },
-    //             {
-    //                 username: "n8k7T74KxBy_BoK6SeLI4DBDbRI2E1NMg14iKZK4K6WPA0zD-Mcs4Yzc4B66N9JeAAAAAGCgXB1zdHJlZXRlcmI=",
-    //                 credential: "a71eec68-3191-11ee-88c1-0242ac150006",
-    //                 urls: [
-    //                     "turn:us-turn12.xirsys.com:80?transport=udp",
-    //                     "turn:us-turn12.xirsys.com:3478?transport=udp",
-    //                     "turn:us-turn12.xirsys.com:80?transport=tcp",
-    //                     "turn:us-turn12.xirsys.com:3478?transport=tcp",
-    //                     "turns:us-turn12.xirsys.com:443?transport=tcp",
-    //                     "turns:us-turn12.xirsys.com:5349?transport=tcp",
-    //                     "stun:stun.l.google.com:19302",
-    //                     "stun:stun1.l.google.com:19302",
-    //                     "stun:stun2.l.google.com:19302",
-    //                     "stun:stun3.l.google.com:19302",
-    //                     "stun:stun4.l.google.com:19302"
-    //                 ]
-    //             }
-    //         ]
-    //     };
-    //},
-
     replaceTrack(stream, recipientPeer) {
         const sender = recipientPeer.getSenders ? recipientPeer.getSenders().find(s => s.track && s.track.kind === stream.kind) : null;
         if (sender) {

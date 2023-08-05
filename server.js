@@ -4,6 +4,8 @@ import { createServer } from "http";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import path from "path";
+import https from "https";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -92,6 +94,37 @@ io.on("connection", (socket) => {
           console.error('Error relaying ICE candidate:', error);
         }
       });
+
+      socket.on("getIceList", () => {
+        const xirsysOptions = {
+            host: "global.xirsys.net",
+            path: "/_turn/Joker4P",
+            method: "PUT",
+            headers: {
+                "Authorization": "Basic " + Buffer.from("jokervideo:f68775d4-ed7a-11eb-962f-0242ac150003").toString("base64"),
+                "Content-Type": "application/json",
+                "Content-Length": 0
+            }
+        };
+
+        const httpreq = https.request(xirsysOptions, (httpres) => {
+            let str = "";
+            httpres.on("data", (data) => {
+                str += data;
+            });
+
+            httpres.on("end", () => {
+                socket.emit("iceList", { iceList: JSON.parse(str) });
+            });
+        });
+
+        httpreq.on("error", (error) => {
+            console.log("Request error:", error);
+            socket.emit("error", { error: "An error occurred" });
+        });
+
+        httpreq.end();
+    });
       
 
       
