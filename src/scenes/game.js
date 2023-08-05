@@ -129,6 +129,7 @@ socket.on( 'newUserStart', ( data ) => {
 } );
 
 socket.on('ice candidates', async (data) => {
+  
   if (data.candidate) {
     let retryAttempts = 3; // Number of retry attempts
     let success = false;
@@ -138,6 +139,12 @@ socket.on('ice candidates', async (data) => {
         await pc[data.sender].addIceCandidate(iceCandidate);
         success = true;
         console.log('----------success----------', success, pc[data.sender].connectionState)
+        pc.onicecandidate = (event) => {
+          if (event.candidate) {
+            console.log('ICE Candidate:', event.candidate);
+            // Send the candidate to the remote peer
+          }
+        };
       } catch (error) {
         console.error('Error adding ICE candidate:', error);
         retryAttempts--;
