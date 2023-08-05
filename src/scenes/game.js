@@ -132,13 +132,12 @@ socket.on('ice candidates', async (data) => {
   if (data.candidate) {
     let retryAttempts = 3; // Number of retry attempts
     let success = false;
-
     while (retryAttempts > 0 && !success) {
       try {
         const iceCandidate = new RTCIceCandidate(data.candidate);
         await pc[data.sender].addIceCandidate(iceCandidate);
         success = true;
-        console.log('----------success----------', success)
+        console.log('----------success----------', success, pc[data.sender].connectionState)
       } catch (error) {
         console.error('Error adding ICE candidate:', error);
         retryAttempts--;
