@@ -138,6 +138,7 @@ socket.on('ice candidates', async (data) => {
         const iceCandidate = new RTCIceCandidate(data.candidate);
         await pc[data.sender].addIceCandidate(iceCandidate);
         success = true;
+        console.log('----------success----------', success)
       } catch (error) {
         console.error('Error adding ICE candidate:', error);
         retryAttempts--;
