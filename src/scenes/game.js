@@ -117,59 +117,37 @@ export default class Game extends Phaser.Scene {
  socket.on( 'new user', ( data ) => {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
   pc.push( data.socketId );
-  console.log('new user log', pc)
+  console.log('new user ---- ', pc)
   init( true, data.socketId );  // create offer
 } );
 
 
 socket.on( 'newUserStart', ( data ) => {
   pc.push( data.sender );
-  console.log('*** new User start ***', pc)
+  console.log('*** new User start *** data sender', pc)
   init( false, data.sender ); // don't create offer
 } );
 
 socket.on('ice candidates', async (data) => {
-  
   if (data.candidate) {
-    let retryAttempts = 3; // Number of retry attempts
-    let success = false;
-    while (retryAttempts > 0 && !success) {
-      try {
-        const iceCandidate = new RTCIceCandidate(data.candidate);
-        await pc[data.sender].addIceCandidate(iceCandidate);
-        success = true;
-        console.log('----------success----------', success, pc[data.sender].connectionState)
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            console.log('ICE Candidate:', event.candidate);
-            // Send the candidate to the remote peer
-          }
-        };
-      } catch (error) {
-        console.error('Error adding ICE candidate:', error);
-        retryAttempts--;
-        if (retryAttempts === 0) {
-          console.error('Max retry attempts reached. Could not add ICE candidate.');
+    try {
+      const iceCandidate = new RTCIceCandidate(data.candidate);
+      await pc[data.sender].addIceCandidate(iceCandidate);
+      console.log('ICE Candidate added successfully:', pc[data.sender].connectionState);
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log('ICE Candidate:', event.candidate);
+          // Send the candidate to the remote peer
         }
-      }
+      };
+    } catch (error) {
+      console.error('Error adding ICE candidate:', error);
     }
   } else {
     console.warn('Received empty ICE candidate.');
   }
 });
 
-// socket.on('ice candidates', async (data) => {
-//   if (data.candidate) {
-//     try {
-//       const iceCandidate = new RTCIceCandidate(data.candidate);
-//       await pc[data.sender].addIceCandidate(iceCandidate);
-//     } catch (error) {
-//       console.error('Error adding ICE candidate:', error);
-//     }
-//   } else {
-//     console.warn('Received empty ICE candidate.');
-//   }
-// });
 
 async function handleSDPData(data) {
   try {
@@ -264,7 +242,6 @@ document.getElementById('toggle-mute').addEventListener('click', (e) => {
 
 
 socket.on('user-disconnected', (userId, playernum) => {
-  //console.log('user disconnected', userId, playernum)
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
       if(playernum === '1') {
@@ -919,6 +896,7 @@ socket.on('updateName', (data, playernum) => {
 function init( createOffer, partnerName ) {
   //console.log("init- create offer",partnerName)
   pc[partnerName] = new RTCPeerConnection( getIceServer() );
+  
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
@@ -1040,18 +1018,21 @@ function handleError(errorMessage) {
     throw new Error(errorMessage);
 }
 
-  pc[partnerName].onconnectionstatechange = ( d ) => {
-      switch ( pc[partnerName].iceConnectionState ) {
-          case 'disconnected':
-          case 'failed':
-              h.closeVideo( partnerName );
-              break;
+pc[partnerName].onconnectionstatechange = (event) => {
+  const iceConnectionState = pc[partnerName].iceConnectionState;
+  console.log('ice connection state', iceConnectionState)
+  switch (iceConnectionState) {
+      case 'disconnected':
+      case 'failed':
+      case 'closed':
+          delete pc[partnerName];
+          h.closeVideo(partnerName);
+          console.log('-------FAILURES ---------', pc)
+          break;
+      // Add more cases as needed
+  }
+};
 
-          case 'closed':
-              h.closeVideo( partnerName );
-              break;
-      }
-  };
 
 
 

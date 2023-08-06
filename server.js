@@ -31,9 +31,9 @@ io.on("connection", (socket) => {
 
   socket.on("joinServer", ({ roomName, userName, playerNum }) => {
     
-    let passed = checkforalphanumberic(roomName, userName)
+    //let passed = checkforalphanumberic(roomName, userName)
     socket.join(roomName);
-    console.log("join server", roomName, userName, playerNum, passed, getClientCount(roomName))
+    console.log("join server", roomName, userName, playerNum, getClientCount(roomName))
     
    
     if (getClientCount(roomName) > 1 && getClientCount(roomName) <= 4 ){
