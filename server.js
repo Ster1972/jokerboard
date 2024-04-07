@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import express from "express";
 import { Server } from "socket.io";
 import { createServer } from "http";
@@ -271,18 +272,18 @@ function getIceServer() {
   return {
       iceServers: [
           {
-              urls: ["stun:us-turn12.xirsys.com"]
+              urls: ["stun:us-turn5.xirsys.com"]
           },
           {
               username: process.env.LOGONID,
               credential: process.env.CREDENTIAL,
               urls: [
-                  "turn:us-turn12.xirsys.com:80?transport=udp",
-                  "turn:us-turn12.xirsys.com:3478?transport=udp",
-                  "turn:us-turn12.xirsys.com:80?transport=tcp",
-                  "turn:us-turn12.xirsys.com:3478?transport=tcp",
-                  "turns:us-turn12.xirsys.com:443?transport=tcp",
-                  "turns:us-turn12.xirsys.com:5349?transport=tcp"
+                "turn:us-turn5.xirsys.com:80?transport=udp",
+                "turn:us-turn5.xirsys.com:3478?transport=udp",
+                "turn:us-turn5.xirsys.com:80?transport=tcp",
+                "turn:us-turn5.xirsys.com:3478?transport=tcp",
+                "turns:us-turn5.xirsys.com:443?transport=tcp",
+                "turns:us-turn5.xirsys.com:5349?transport=tcp"
 
               ]
           }
