@@ -1,4 +1,4 @@
-
+"use strict";
 import playerMarble from "../helpers/playerballs.js";
 import boardHole from "../helpers/boardholes.js";
 import Modal from "../helpers/modal.js"
@@ -37,6 +37,7 @@ export default class Game extends Phaser.Scene {
     let myStream = ''
     let pc = []
     let screen = ''
+    let socId = ''
 
     // add dom to scene - used for WEBRTC stuff 
     const container = this.add.dom(1375, 250).createFromCache('videodom');
@@ -46,17 +47,24 @@ export default class Game extends Phaser.Scene {
     let c2 = this.add.circle(1005, 105, 11, 0x000000)
     let c3 = this.add.circle(1035, 105, 11, 0x000000)
     let c4 = this.add.circle(1065, 105, 11, 0x000000)
-    //console.log("session storage for Username =", userName, roomName, playerNum)
+    console.log("session storage for Username =", userName, roomName, playerNum)
 
     const socket = io({ transports: ["websocket"] });
 
     socket.on("connect", () => {
       console.log("socket on connect: ", socket.id, socket.connected);//socket.io.engine
       playerNum = sessionStorage.getItem("playerNum")
-      socket.emit("joinServer", { roomName, userName, playerNum });
+      socId = socket.id
+      console.log('socket iD ===== ', socId)
+      socket.emit("joinServer", { 
+        roomName: roomName,
+        userName: userName, 
+        playerNum: playerNum, 
+        socketId: socId });
       socket.on("connectToRoom", (users) => {
         console.log('data recieved from server: ', users)
         let playerobj = users.filter((e) => e.player === userName);
+        console.log('playerobj', playerobj)
         sessionStorage.setItem("playerNum", playerobj[0].playernum);
 
         let pp1 = users.some(p => p.playernum === '1')
@@ -117,131 +125,114 @@ export default class Game extends Phaser.Scene {
  socket.on( 'new user', ( data ) => {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
   pc.push( data.socketId );
-  console.log('new user ---- ', pc)
-  init( true, data.socketId );  // create offer
+  init( true, data.socketId );
 } );
 
 
 socket.on( 'newUserStart', ( data ) => {
   pc.push( data.sender );
-  console.log('*** new User start *** data sender', pc)
-  init( false, data.sender ); // don't create offer
+  init( false, data.sender );
 } );
 
-socket.on('ice candidates', async (data) => {
-  if (data.candidate) {
-    try {
-      const iceCandidate = new RTCIceCandidate(data.candidate);
-      await pc[data.sender].addIceCandidate(iceCandidate);
-      console.log('ICE Candidate added successfully:', pc[data.sender].connectionState);
-      pc.onicecandidate = (event) => {
-        if (event.candidate) {
-          console.log('ICE Candidate:', event.candidate);
-          // Send the candidate to the remote peer
-        }
-      };
-    } catch (error) {
-      console.error('Error adding ICE candidate:', error);
-    }
-  } else {
-    console.warn('Received empty ICE candidate.');
+socket.on( 'ice candidates', async ( data ) => {
+  data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
+} );
+
+socket.on( 'sdp', async ( data ) => {
+  if ( data.description.type === 'offer' ) {
+      data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+
+      h.getUserFullMedia().then( async ( stream ) => {
+          if ( !document.getElementById( 'local' ).srcObject ) {
+              h.setLocalStream( stream );
+          }
+
+          //save my stream
+          myStream = stream;
+
+          stream.getTracks().forEach( ( track ) => {
+              pc[data.sender].addTrack( track, stream );
+          } );
+
+          let answer = await pc[data.sender].createAnswer();
+
+          await pc[data.sender].setLocalDescription( answer );
+
+          socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id } );
+      } ).catch( ( e ) => {
+          console.error( e );
+      } );
   }
-});
 
-
-async function handleSDPData(data) {
-  try {
-    if (data.description.type === 'offer') {
-      await handleOffer(data);
-    } else if (data.description.type === 'answer') {
-      await handleAnswer(data);
-    }
-  } catch (error) {
-    console.error('Error handling SDP data:', error);
-    // Handle the error appropriately
+  else if ( data.description.type === 'answer' ) {
+      await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
   }
-};
+} );
 
-async function handleOffer(data) {
-  try {
-    const remoteDescription = new RTCSessionDescription(data.description);
-    await pc[data.sender].setRemoteDescription(remoteDescription);
-
-    // Ensure we have a local stream before proceeding
-    if (!document.getElementById('local').srcObject) {
-      const localStream = await h.getUserFullMedia();
-      h.setLocalStream(localStream);
-    }
-
-    // Update myStream to use the local stream
-    myStream = document.getElementById('local').srcObject;
-
-    // Add the local tracks to the peer connection
-    myStream.getTracks().forEach((track) => {
-      pc[data.sender].addTrack(track, myStream);
-    });
-
-    // Create an answer and set it as the local description
-    const answer = await pc[data.sender].createAnswer();
-    await pc[data.sender].setLocalDescription(answer);
-
-    // Send the answer as the local description via socket
-    socket.emit('sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id });
-  } catch (error) {
-    console.error('Error handling offer:', error);
-  }
-}
-
-async function handleAnswer(data) {
-  const remoteDescription = new RTCSessionDescription(data.description);
-  await pc[data.sender].setRemoteDescription(remoteDescription);
-}
-
-socket.on('sdp', handleSDPData);
 
 //When the video mute icon is clicked
-document.getElementById('toggle-video').addEventListener('click', (e) => {
-  e.preventDefault();
 
-  let iconVideo = document.getElementById('buttonVideo');
-  let videoTrack = myStream.getVideoTracks()[0];
-  if (videoTrack) {
-    if (videoTrack.enabled) {
-      iconVideo.classList.remove('bi-camera-video-fill');
-      iconVideo.classList.add('bi-camera-video-off-fill');
-      videoTrack.enabled = false; // Mute the video
-    } else {
-      iconVideo.classList.remove('bi-camera-video-off-fill');
-      iconVideo.classList.add('bi-camera-video-fill');
-      videoTrack.enabled = true; // Unmute the video
+document.getElementById('toggle-video').addEventListener('click', (e) => {e.preventDefault();
+
+  let iconVideo = document.getElementById('buttonVideo')
+  if (myStream.getVideoTracks()[0].enabled){
+    if (e.target.classList.contains('btn-secondary')){
+    iconVideo.className = 'bi bi-camera-video-off-fill'
+    myStream.getVideoTracks()[0].enabled = false;
     }
-
-    broadcastNewTracks(myStream, 'video');
+    else if (e.target.classList.contains('bi-camera-video-fill') || e.target.classList.contains('btn-secondary')){
+      e.target.classList.remove('bi-camera-video-fill');
+      e.target.classList.add('bi-camera-video-off-fill');
+      myStream.getVideoTracks()[0].enabled = false;
+      }
+    }
+  else {
+    if (e.target.classList.contains('btn-secondary')){
+        iconVideo.className = 'bi bi-camera-video-fill'
+        myStream.getVideoTracks()[0].enabled = true;
+    }
+    else if(e.target.classList.contains('bi-camera-video-off-fill') || e.target.classList.contains('btn-secondary')){
+        e.target.classList.remove('bi-camera-video-off-fill');
+        e.target.classList.add('bi-camera-video-fill');
+        myStream.getVideoTracks()[0].enabled = true;
+    }
   }
-});
+broadcastNewTracks(myStream, 'video')
+
+})
+
 
 //When the audio mute icon is clicked
 document.getElementById('toggle-mute').addEventListener('click', (e) => {
-  e.preventDefault();
-  const iconAudio = document.getElementById('buttonAudio');
-  const audioTrack = myStream.getAudioTracks()[0];
-
-  if (audioTrack) {
-    if (audioTrack.enabled) {
-      iconAudio.classList.remove('bi-mic-fill');
-      iconAudio.classList.add('bi-mic-mute-fill');
-    } else {
-      iconAudio.classList.remove('bi-mic-mute-fill');
-      iconAudio.classList.add('bi-mic-fill');
+e.preventDefault();
+let iconAudio = document.getElementById('buttonAudio')
+  if (myStream.getAudioTracks()[0].enabled){
+    if (e.target.classList.contains('btn-secondary')){
+      iconAudio.className = 'bi bi-mic-mute-fill'
+      myStream.getAudioTracks()[0].enabled = false;
     }
-
-    audioTrack.enabled = !audioTrack.enabled; // Toggle the audio state (mute/unmute)
-    broadcastNewTracks(myStream, 'audio');
+    else if (e.target.classList.contains('bi-mic-fill')){
+      e.target.classList.remove('bi-mic-fill');
+      e.target.classList.add('bi-mic-mute-fill');
+      myStream.getAudioTracks()[0].enabled = false;
+      }
   }
+  else {
+    if (e.target.classList.contains('btn-secondary')){
+        iconAudio.className = 'bi bi-mic-fill'
+        myStream.getAudioTracks()[0].enabled = true;
+    }
+    else if(e.target.classList.contains('bi-mic-mute-fill')){
+        e.target.classList.remove('bi-mic-mute-fill');
+        e.target.classList.add('bi-mic-fill');
+        myStream.getAudioTracks()[0].enabled = true;
+    }
+  }
+broadcastNewTracks(myStream, 'audio')
 });
 
-
 socket.on('user-disconnected', (userId, playernum) => {
+  console.log('user disconnected', userId, playernum, typeof playernum)
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
       if(playernum === '1') {
@@ -261,6 +252,7 @@ socket.on('user-disconnected', (userId, playernum) => {
 })
 
 socket.on('updateName', (data, playernum) => {
+  console.log('update the name on board', data, playernum, typeof playernum)
   if (playernum === 1){
     sessionStorage.setItem('playerName1', data)
     playerName1Text.text = data;
@@ -631,53 +623,42 @@ socket.on('updateName', (data, playernum) => {
     let yellowBlueMarbles = (obj, playersmarble) => {
       //console.log('yellowBlue Marble FUNCTION: ', obj.frame.name, playersmarble.frame.name)
 
-      const checkOverlap = (marbles, home) => {
-        return this.physics.world.overlap(marbles, home);
-      };
-      const blueMarbles = [r1, r2, r3, r4, r5];
-      const yellowMarbles = [l1, l2, l3, l4, l5];
-      const redMarbles = [b1, b2, b3, b4, b5];
-      const greenMarbles = [t1, t2, t3, t4, t5];
+      const bhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], RightHome)
+      const bhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], RightHome)
+      const bhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome)
+      const bhfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], RightHome)
+      const yhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], LeftHome)
+      const yhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], LeftHome)
+      const yhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], LeftHome)
+      const yhfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome)
 
-      const bhfWithBlue = checkOverlap(blueMarbles, RightHome);
-      const bhfWithYellow = checkOverlap(yellowMarbles, RightHome);
-      const bhfWithRed = checkOverlap(redMarbles, RightHome);
-      const bhfWithGreen = checkOverlap(greenMarbles, RightHome);
-      const yhfWithBlue = checkOverlap(blueMarbles, LeftHome);
-      const yhfWithYellow = checkOverlap(yellowMarbles, LeftHome);
-      const yhfWithRed = checkOverlap(redMarbles, LeftHome);
-      const yhfWithGreen = checkOverlap(greenMarbles, LeftHome);
-
-      const currentMarble = playersmarble.frame.name;
-      const objName = obj.frame.name;
-
-      if (objName === currentMarble) {
-         objdragStart(obj, this.textMarker)
-            } else if (objName === 'b' && currentMarble === 'y' && yhfWithYellow) {
+      if (obj.frame.name === playersmarble.frame.name) {
+         objdragStart(obj)
+            } else if (obj.frame.name === 'b' && playersmarble.frame.name === 'y' && yhfWithYellow) {
                 modal.setMessage('Yellow Home entrance is occupied with a Yellow Marble already.\n');
                 modal.show();
-                objdragStart(obj, this.textMarker)
-            } else if (objName === 'y' && currentMarble === 'b' && bhfWithBlue) {
+                objdragStart(obj)
+            } else if (obj.frame.name === 'y' && playersmarble.frame.name === 'b' && bhfWithBlue) {
                     modal.setMessage('Blue Home entrance is occupied with a Blue Marble already.\n');
                     modal.show();
-                    objdragStart(obj, this.textMarker)
-            } else if (objName === 'b' && currentMarble === 'y' && bhfWithYellow && yhfWithBlue) {
+                    objdragStart(obj)
+            } else if (obj.frame.name === 'b' && playersmarble.frame.name === 'y' && bhfWithYellow && yhfWithBlue) {
                         modal.setMessage('Blue Home entrance is blocked as Blue marble at Yellow Home entrance is also block by Yellow marble at the Blue Home entrance.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
-            } else if (objName === 'y' && currentMarble === 'b' && bhfWithYellow && yhfWithBlue) {
+                        objdragStart(obj)
+            } else if (obj.frame.name === 'y' && playersmarble.frame.name === 'b' && bhfWithYellow && yhfWithBlue) {
                             modal.setMessage('Yellow Home entrance is blocked as Yellow marble at Blue Home entrance is also block by Blue marble at the Yellow Home entrance.\n');
                             modal.show();
-                            objdragStart(obj, this.textMarker)
-            } else if (objName === 'b' && currentMarble === 'y' && bhfWithBlue && yhfWithBlue) {
+                            objdragStart(obj)
+            } else if (obj.frame.name === 'b' && playersmarble.frame.name === 'y' && bhfWithBlue && yhfWithBlue) {
                                 modal.setMessage('Blue Home entrance and Yellow Home entrance are both occupied with BLUE Marbles.\n');
                                 modal.show();
-                                objdragStart(obj, this.textMarker)
-            } else if (objName === 'y' && currentMarble === 'b' && bhfWithYellow && yhfWithYellow) {
+                                objdragStart(obj)
+            } else if (obj.frame.name === 'y' && playersmarble.frame.name === 'b' && bhfWithYellow && yhfWithYellow) {
                                     modal.setMessage('Yellow Home entrance and Blue Home entrance are both occupied with YELLOW Marbles.\n');
                                     modal.show();
-                                    objdragStart(obj, this.textMarker)
-            } else if (objName === 'y' && currentMarble === 'b') {
+                                    objdragStart(obj)
+            } else if (obj.frame.name === 'y' && playersmarble.frame.name === 'b') {
                                         if (bhfWithYellow) {
                                             this.physics.world.overlap([l1, l2, l3, l4, l5], RightHome, move_partners_Marble)
                                             this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome, move_opponets_Marble)
@@ -688,7 +669,7 @@ socket.on('updateName', (data, playernum) => {
                                              this.physics.world.overlap([t1, t2, t3, t4, t5], RightHome, move_opponets_Marble)
                                         }
                                         playerHome(playersmarble, obj)
-            } else if (objName === 'b' && currentMarble === 'y') {
+            } else if (obj.frame.name === 'b' && playersmarble.frame.name === 'y') {
                                             if (yhfWithBlue) {
                                                 this.physics.world.overlap([r1, r2, r3, r4, r5], LeftHome, move_partners_Marble)
                                                 this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome, move_opponets_Marble)
@@ -699,7 +680,7 @@ socket.on('updateName', (data, playernum) => {
                                                 this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome, move_opponets_Marble)
                                             }
                                             playerHome(playersmarble, obj)
-            } else if ((objName === 'g' || obj.frame.name === 'r') && (currentMarble === 'b' || currentMarble === 'y')) {
+            } else if ((obj.frame.name === 'g' || obj.frame.name === 'r') && (playersmarble.frame.name === 'b' || playersmarble.frame.name === 'y')) {
                                                 playerStart(playersmarble, obj)
                                             }
     } // end of yellowBlueMarbles
@@ -717,31 +698,31 @@ socket.on('updateName', (data, playernum) => {
       const ghfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], TopHome)
 
       if (obj.frame.name === playersmarble.frame.name) {
-                objdragStart(obj, this.textMarker)
+                objdragStart(obj)
             } else if (obj.frame.name === 'g' && playersmarble.frame.name === 'r' && rhfWithRed) {
                         modal.setMessage('Red Home entrance is occupied with a RED Marble already.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'r' && playersmarble.frame.name === 'g' && ghfWithGreen) {
                         modal.setMessage('Green Home entrance is occupied with a GREEN Marble already.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'g' && playersmarble.frame.name === 'r' && ghfWithRed && rhfWithGreen) {
                         modal.setMessage('Green Home entrance is blocked as Green marble at Red Home entrance is also block by Red marble at the Green Home entrance.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'r' && playersmarble.frame.name === 'g' && ghfWithRed && rhfWithGreen) {
                         modal.setMessage('Red Home entrance is blocked as Red marble at Green Home entrance is also block by Green marble at the Red Home entrance.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'g' && playersmarble.frame.name === 'r' && ghfWithGreen && rhfWithGreen) {
                         modal.setMessage('Green Home entrance and Red Home entrance are both occupied with GREEN Marbles.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'r' && playersmarble.frame.name === 'g' && ghfWithRed && rhfWithRed) {
                         modal.setMessage('Red Home entrance and Green Home entrance are both occupied with RED Marbles.\n');
                         modal.show();
-                        objdragStart(obj, this.textMarker)
+                        objdragStart(obj)
             } else if (obj.frame.name === 'r' && playersmarble.frame.name === 'g') {
                         // Check to see if red home is occupied, if so move marble
                         if (ghfWithRed) {
@@ -773,10 +754,9 @@ socket.on('updateName', (data, playernum) => {
     } // end of greenRedMarbles
 
 
-    function objdragStart(obj, text) {
+    function objdragStart(obj) {
         obj.x = obj.input.dragStartX
         obj.y = obj.input.dragStartY
-        text.setVisible(false);
       }
 
     function move_partners_Marble(item) {
@@ -887,6 +867,7 @@ socket.on('updateName', (data, playernum) => {
   h.getUserFullMedia().then( ( stream ) => {
       //save my stream
       myStream = stream;
+
       h.setLocalStream( stream );
   } ).catch( ( e ) => {
       console.error( `stream error: ${ e }` );
@@ -894,145 +875,95 @@ socket.on('updateName', (data, playernum) => {
 }
 
 function init( createOffer, partnerName ) {
-  //console.log("init- create offer",partnerName)
-  pc[partnerName] = new RTCPeerConnection( getIceServer() );
-  
+  console.log("init- create offer",partnerName)
+  pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
+
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
       } );
   }
+
   else if ( myStream ) {
       myStream.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, myStream );//should trigger negotiationneeded event
       } );
   }
+
   else {
       h.getUserFullMedia().then( ( stream ) => {
           //save my stream
           myStream = stream;
+
           stream.getTracks().forEach( ( track ) => {
               pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
           } );
+
           h.setLocalStream( stream );
       } ).catch( ( e ) => {
           console.error( `stream error: ${ e }` );
       } );
   }
 
+
+
   //create offer
- // Create a separate async function to handle the offer creation and sending
- async function createAndSendOffer(pc, partnerName, socket) {
-  try {
-    const offer = await pc[partnerName].createOffer();
-    await pc[partnerName].setLocalDescription(offer);
-    const sdpData = {
-      description: pc[partnerName].localDescription,
-      to: partnerName,
-      sender: socket.id,
-    };
-    socket.emit('sdp', sdpData);
-  } catch (error) {
-    // Handle any errors that may occur during offer creation or sending
-    console.error('Error creating and sending offer:', error);
-  }
-}
+  if ( createOffer ) {
+      pc[partnerName].onnegotiationneeded = async () => {
+          let offer = await pc[partnerName].createOffer();
 
-async function getIceServer() {
-  return new Promise((resolve, reject) => {
-    socket.emit("getIceList");
+          await pc[partnerName].setLocalDescription( offer );
 
-    socket.once("iceList", (data) => {
-      resolve(data.iceList);
-    });
-
-    socket.once("error", (error) => {
-      console.error("ICE List request error:", error);
-      reject(error);
-    });
-  });
-}
-
-// Check if the 'createOffer' flag is truthy, then call the function
-if (createOffer) {
-  pc[partnerName].onnegotiationneeded = async () => {
-    await createAndSendOffer(pc, partnerName, socket);
-  };
-}
-
-
-  // Send ICE candidate to the partner
-pc[partnerName].onicecandidate = ({ candidate }) => {
-  try {
-    if (candidate) {
-      const data = {
-        candidate: candidate,
-        to: partnerName,
-        sender: socket.id,
+          socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socket.id } );
       };
-      socket.emit('ice candidates', data);
-      //console.log("sending ice candidate to server", data)
-    } else {
-      console.warn('Empty ICE candidate.', candidate);
-    }
-  } catch (error) {
-    console.error('Error sending ICE candidate:', error);
   }
-};
+
+
+
+  //send ice candidate to partnerNames
+  pc[partnerName].onicecandidate = ( { candidate } ) => {
+      socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
+  };
+
+
 
   //add
-  pc[partnerName].ontrack = (event) => {
-    const remoteStream = event.streams[0];
-    //console.log('Received remote stream:', remoteStream);
+  pc[partnerName].ontrack = ( e ) => {
+      let str = e.streams[0];
+      if ( document.getElementById( `${ partnerName }-video` ) ) {
+          document.getElementById( `${ partnerName }-video` ).srcObject = str;
+      }
 
-    const partnerVideoElementId = `${partnerName}-video`;
-    const existingVideoElement = document.getElementById(partnerVideoElementId);
+      else {
+          //video elem
+          let newVid = document.createElement( 'video' );
+          newVid.id = `${ partnerName }-video`;
+          newVid.srcObject = str;
+          newVid.autoplay = true;
+          newVid.className = 'remote-video';
+          newVid.disablePictureInPicture = true;
+          videos.append(newVid);
+  
+          document.getElementById( 'videos' ).appendChild( newVid );
 
-    if (remoteStreamIsValid(remoteStream)) {
-        if (existingVideoElement) {
-            existingVideoElement.srcObject = remoteStream;
-        } else {
-            createAndAddVideoElement(partnerName, remoteStream);
-        }
-    } else {
-        handleError('Received invalid remote stream.');
-    }
-};
+          //h.adjustVideoElemSize();
+      }
+  };
 
-function remoteStreamIsValid(stream) {
-    return stream && stream.getTracks().length > 0;
-}
 
-function createAndAddVideoElement(partnerName, remoteStream) {
-    const newVid = document.createElement('video');
-    newVid.id = `${partnerName}-video`;
-    newVid.srcObject = remoteStream;
-    newVid.className = 'remote-video mirror-mode';
-    newVid.autoplay = true;
-    newVid.disablePictureInPicture = true;
-    document.getElementById('videos').appendChild(newVid);
-}
 
-function handleError(errorMessage) {
-    // Handle the error more gracefully, e.g., show a user-friendly message to the user
-    throw new Error(errorMessage);
-}
+  pc[partnerName].onconnectionstatechange = ( d ) => {
+      switch ( pc[partnerName].iceConnectionState ) {
+          case 'disconnected':
+          case 'failed':
+              h.closeVideo( partnerName );
+              break;
 
-pc[partnerName].onconnectionstatechange = (event) => {
-  const iceConnectionState = pc[partnerName].iceConnectionState;
-  console.log('ice connection state', iceConnectionState)
-  switch (iceConnectionState) {
-      case 'disconnected':
-      case 'failed':
-      case 'closed':
-          delete pc[partnerName];
-          h.closeVideo(partnerName);
-          console.log('-------FAILURES ---------', pc)
-          break;
-      // Add more cases as needed
-  }
-};
-
+          case 'closed':
+              h.closeVideo( partnerName );
+              break;
+      }
+  };
 
 
 
@@ -1044,25 +975,21 @@ pc[partnerName].onconnectionstatechange = (event) => {
               break;
       }
   };
-
 }  // end of function
 
+function broadcastNewTracks( stream, type, mirrorMode = true ) {
+  h.setLocalStream( stream, mirrorMode );
 
-function broadcastNewTracks(stream, type, mirrorMode) {
-  h.setLocalStream(stream, mirrorMode = true);
-  if (type !== 'audio' && type !== 'video') {
-    console.error('Invalid type provided. Expected "audio" or "video".');
-    return;
-  }
-  const track = type === 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
-  for (const pcInstance of Object.values(pc)) {
-    if (pcInstance) {
-      h.replaceTrack(track, pcInstance);
-    }
+  let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+
+  for ( let p in pc ) {
+      let pName = pc[p];
+
+      if ( typeof pc[pName] == 'object' ) {
+          h.replaceTrack( track, pc[pName] );
+      }
   }
 }
-
-
 
 
 

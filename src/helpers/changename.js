@@ -1,4 +1,4 @@
-
+"use strict";
 
 export default class CustomModal extends Phaser.GameObjects.Container {
   constructor(scene, socket, playerId, textObject) {

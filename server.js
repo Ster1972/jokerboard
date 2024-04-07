@@ -4,17 +4,20 @@ import { createServer } from "http";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import path from "path";
-import https from "https";
-
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const options = {
+  transports: ["websockets"],
+  allowUpgrades: false,
+  pingInterval: 30000,
+  pingTimeout: 60000,
+  cookie: false
+}
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server, {
-  connectionStateRecovery: {}
-});
+const io = new Server(server);
 const PORT = process.env.PORT || 5056;
 
 app.use(express.static(path.join(__dirname, "/")));
@@ -31,16 +34,20 @@ io.on("connection", (socket) => {
   console.log("User connected..  ", socket.id);
   //console.log('socket connected', socket.connected, process.argv);
 
-  socket.on("joinServer", ({ roomName, userName, playerNum }) => {
-    
-    //let passed = checkforalphanumberic(roomName, userName)
+  socket.on("joinServer", (data) => {
+    let roomName = data.roomName
+    let userName = data.userName
+    let playerNum = data.playerNum
+    let socketID = data.socketId
+    console.log('socket ID =====', data)
+    let passed = checkforalphanumberic(roomName, userName)
     socket.join(roomName);
-    console.log("join server", roomName, userName, playerNum, getClientCount(roomName))
+    socket.join(socketID)
+    console.log("join server", roomName, userName, playerNum, passed, getClientCount(roomName), socketID)
     
    
     if (getClientCount(roomName) > 1 && getClientCount(roomName) <= 4 ){
-      socket.to(roomName).emit('new user', {socketId: socket.id});
-      console.log('new video user has joined', socket.id )
+      socket.to(roomName).emit('new user', {socketId: data.socketId});
     }
     if (getClientCount(roomName) > 4){
       console.log('too many players detected',getClientCount(roomName)  )
@@ -62,74 +69,17 @@ io.on("connection", (socket) => {
      // -------------WebRTC stuff ---------------------
 
       socket.on( 'newUserStart', ( data ) => {
-        //console.log('new user joins:', data.sender, data.to)
+        console.log('new user joins:', data.sender, data.to)
           socket.to( data.to ).emit( 'newUserStart', { sender: data.sender } );
       } );
 
-      socket.on('sdp', (data) => {
-        try {
-          if (data.description && data.to && data.sender) {
-            socket.to(data.to).emit('sdp', {
-              description: data.description,
-              sender: data.sender,
-            });
-          } else {
-            console.warn('Invalid SDP data received.');
-          }
-        } catch (error) {
-          console.error('Error relaying SDP data:', error);
-        }
-      });
-      
+      socket.on( 'sdp', ( data ) => {
+          socket.to( data.to ).emit( 'sdp', { description: data.description, sender: data.sender } );
+      } );
 
-      socket.on('ice candidates', (data) => {
-        try {
-          if (data.candidate && data.to && data.sender) {
-            socket.to(data.to).emit('ice candidates', {
-              candidate: data.candidate,
-              sender: data.sender,
-            });
-          } else {
-            console.warn('Invalid ICE candidate data received.');
-          }
-        } catch (error) {
-          console.error('Error relaying ICE candidate:', error);
-        }
-      });
-
-      socket.on("getIceList", () => {
-        const xirsysOptions = {
-            host: "global.xirsys.net",
-            path: "/_turn/Joker4P",
-            method: "PUT",
-            headers: {
-                "Authorization": "Basic " + Buffer.from("jokervideo:f68775d4-ed7a-11eb-962f-0242ac150003").toString("base64"),
-                "Content-Type": "application/json",
-                "Content-Length": 0
-            }
-        };
-
-        const httpreq = https.request(xirsysOptions, (httpres) => {
-            let str = "";
-            httpres.on("data", (data) => {
-                str += data;
-            });
-
-            httpres.on("end", () => {
-                socket.emit("iceList", { iceList: JSON.parse(str) });
-            });
-        });
-
-        httpreq.on("error", (error) => {
-            console.log("Request error:", error);
-            socket.emit("error", { error: "An error occurred" });
-        });
-
-        httpreq.end();
-    });
-      
-
-      
+      socket.on( 'ice candidates', ( data ) => {
+          socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
+      } );
 
       // ************ END OF WEBRTC Stuff  ********************
 
@@ -189,9 +139,9 @@ io.on("connection", (socket) => {
       //console.log('user DB', users)
       //const info = users.filter((e) => e.id === socket.id) //get player info
       const index = users.findIndex((e) => e.id === id); //get index of user disconnected
-      //console.log('users data', index, users[index])
+      console.log('users data', index, users[index])
       users[index].player = data
-     // console.log('update data', users[index],roomName)
+      console.log('update data', users[index],roomName)
       socket.to(roomName).emit('updateName', data, playernum)
     })
 
@@ -312,6 +262,30 @@ function exist(playerNum, room){
   let roomusers = users.filter((e) => e.gameName === room);
   let check = roomusers.some((user) => user.playernum === playerNum);
   return check
+}
+
+function getIceServer() {
+        
+  return {
+      iceServers: [
+          {
+              urls: ["stun:us-turn12.xirsys.com"]
+          },
+          {
+              username: process.env.LOGONID,
+              credential: process.env.CREDENTIAL,
+              urls: [
+                  "turn:us-turn12.xirsys.com:80?transport=udp",
+                  "turn:us-turn12.xirsys.com:3478?transport=udp",
+                  "turn:us-turn12.xirsys.com:80?transport=tcp",
+                  "turn:us-turn12.xirsys.com:3478?transport=tcp",
+                  "turns:us-turn12.xirsys.com:443?transport=tcp",
+                  "turns:us-turn12.xirsys.com:5349?transport=tcp"
+
+              ]
+          }
+      ]
+  };
 }
 
 function getClientCount(roomName) {
