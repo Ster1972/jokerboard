@@ -12,7 +12,9 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const server = createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  connectionStateRecovery: {}
+});
 const PORT = process.env.PORT || 5056;
 
 app.use(express.static(path.join(__dirname, "/")));
