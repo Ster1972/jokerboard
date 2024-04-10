@@ -84,6 +84,12 @@ io.on("connection", (socket) => {
           socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
       } );
 
+      socket.on('getIceServer_Info', () => {
+          socket.emit('iceserver', iceServer)
+      })
+  
+      
+
       // ************ END OF WEBRTC Stuff  ********************
 
     // ---- This is were the game recovery stuff would go
@@ -267,29 +273,28 @@ function exist(playerNum, room){
   return check
 }
 
-function getIceServer() {
-        
-  return {
+const iceServer = {
       iceServers: [
           {
-              urls: ["stun:us-turn5.xirsys.com"]
+              urls: ["stun:us-turn12.xirsys.com"]
           },
           {
               username: process.env.LOGONID,
               credential: process.env.CREDENTIAL,
               urls: [
-                "turn:us-turn5.xirsys.com:80?transport=udp",
-                "turn:us-turn5.xirsys.com:3478?transport=udp",
-                "turn:us-turn5.xirsys.com:80?transport=tcp",
-                "turn:us-turn5.xirsys.com:3478?transport=tcp",
-                "turns:us-turn5.xirsys.com:443?transport=tcp",
-                "turns:us-turn5.xirsys.com:5349?transport=tcp"
+                  "turn:us-turn12.xirsys.com:80?transport=udp",
+                  "turn:us-turn12.xirsys.com:3478?transport=udp",
+                  "turn:us-turn12.xirsys.com:80?transport=tcp",
+                  "turn:us-turn12.xirsys.com:3478?transport=tcp",
+                  "turns:us-turn12.xirsys.com:443?transport=tcp",
+                  "turns:us-turn12.xirsys.com:5349?transport=tcp"
 
               ]
           }
       ]
   };
-}
+
+
 
 function getClientCount(roomName) {
   const room = io.sockets.adapter.rooms.get(roomName);

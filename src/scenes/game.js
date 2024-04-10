@@ -876,7 +876,12 @@ socket.on('updateName', (data, playernum) => {
 
 function init( createOffer, partnerName ) {
   console.log("init- create offer",partnerName)
-  pc[partnerName] = new RTCPeerConnection( h.getIceServer() );
+  let ice
+  socket.emit('getIceServer_Info')
+  socket.on('iceserver', (data) =>{
+    ice = data
+  })
+  pc[partnerName] = new RTCPeerConnection( ice );
 
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
