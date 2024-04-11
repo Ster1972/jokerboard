@@ -279,8 +279,8 @@ const iceServer = {
               urls: ["stun:us-turn12.xirsys.com"]
           },
           {
-              username: process.env.LOGONID,
-              credential: process.env.CREDENTIAL,
+              username: process.env.USERID,
+              credential: process.env.CRED,
               urls: [
                   "turn:us-turn12.xirsys.com:80?transport=udp",
                   "turn:us-turn12.xirsys.com:3478?transport=udp",
