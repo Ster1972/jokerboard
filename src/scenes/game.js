@@ -882,7 +882,7 @@ function init( createOffer, partnerName ) {
     ice = data
   })
   pc[partnerName] = new RTCPeerConnection( ice );
-
+  console.log("*****: ",pc[partnerName])
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
           pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
