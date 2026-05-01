@@ -126,13 +126,13 @@ export default class Game extends Phaser.Scene {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
   pc.push( data.socketId );
   init( true, data.socketId );
-} );
+ } );
 
 
-socket.on( 'newUserStart', ( data ) => {
-  pc.push( data.sender );
-  init( false, data.sender );
-} );
+  socket.on( 'newUserStart', ( data ) => {
+    pc.push( data.sender );
+    init( false, data.sender );
+  } );
 
 socket.on( 'ice candidates', async ( data ) => {
   data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';

@@ -52,6 +52,7 @@ io.on("connection", (socket) => {
     if (getClientCount(roomName) > 1 && getClientCount(roomName) <= 4 ){
       socket.to(roomName).emit('new user', {socketId: data.socketId});
     }
+    
     if (getClientCount(roomName) > 4){
       console.log('too many players detected',getClientCount(roomName)  )
       users.push({ gameName: roomName, player: userName, id: socket.id, playernum: '5',})
@@ -81,6 +82,7 @@ io.on("connection", (socket) => {
       } );
 
       socket.on( 'ice candidates', ( data ) => {
+        console.log('Sending ice candidates to', data.to)
           socket.to( data.to ).emit( 'ice candidates', { candidate: data.candidate, sender: data.sender } );
       } );
 
