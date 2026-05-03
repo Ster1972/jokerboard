@@ -6,6 +6,13 @@ export default function boardHole(scene){
     
     const gameBoard = scene.physics.add.group({ immovable: true }) //Creat group for gameBoard
 
+    // Helper to tag holes with metadata for collision detection and game logic
+    function tag(hole, side, type) {
+        hole.side = side; // "top", "right", "bottom", "left"
+        hole.type = type; // "home", "exit", "corner", "normal"
+        return hole;
+    }
+
     gameBoard.create(50, 90, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 72
     gameBoard.create(50, 130, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
     gameBoard.create(50, 170, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
@@ -146,6 +153,19 @@ export default function boardHole(scene){
     leftHome.create(180, 650, 'sphere', 'home').refreshBody().setCircle(12,4,4)
     leftHome.create(180, 610, 'sphere', 'home').refreshBody().setCircle(12,4,4)
     leftHome.create(180, 570, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+
+    // --------- ADD METADATA TO KEY HOLES FOR GAME LOGIC ---------
+    // Tag the four main entry holes on the track
+    tag(TopHome, "top", "home");
+    tag(RightHome, "right", "home");
+    tag(LeftHome, "left", "home");
+    tag(BottomHome, "bottom", "home");
+
+    // Tag the 5-hole home areas for each player
+    topHome.getChildren().forEach(h => tag(h, "top", "home"));
+    rightHome.getChildren().forEach(h => tag(h, "right", "home"));
+    bottomHome.getChildren().forEach(h => tag(h, "bottom", "home"));
+    leftHome.getChildren().forEach(h => tag(h, "left", "home"));  
 
     return {gameBoard, TopHome,RightHome,LeftHome,BottomHome, topHome, rightHome, leftHome, bottomHome}
 }
