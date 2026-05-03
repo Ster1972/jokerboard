@@ -7,6 +7,49 @@ import Card from "../helpers/cards.js"
 import h from "../helpers/videohelp.js"
 import CustomModal from "../helpers/changename.js"
 
+const MARBLE_LAYOUT = {
+  top: {
+    color: 'g',
+    positions: [
+      { x: 370, y: 100, id: 't1' },
+      { x: 370, y: 140, id: 't2' },
+      { x: 370, y: 180, id: 't3' },
+      { x: 330, y: 140, id: 't4' },
+      { x: 410, y: 140, id: 't5' },
+    ],
+  },
+  right: {
+    color: 'b',
+    positions: [
+      { x: 710, y: 370, id: 'r1' },
+      { x: 670, y: 370, id: 'r2' },
+      { x: 630, y: 370, id: 'r3' },
+      { x: 670, y: 330, id: 'r4' },
+      { x: 670, y: 410, id: 'r5' },
+    ],
+  },
+  bottom: {
+    color: 'r',
+    positions: [
+      { x: 450, y: 720, id: 'b1' },
+      { x: 450, y: 680, id: 'b2' },
+      { x: 450, y: 640, id: 'b3' },
+      { x: 490, y: 680, id: 'b4' },
+      { x: 410, y: 680, id: 'b5' },
+    ],
+  },
+  left: {
+    color: 'y',
+    positions: [
+      { x: 100, y: 450, id: 'l1' },
+      { x: 140, y: 450, id: 'l2' },
+      { x: 180, y: 450, id: 'l3' },
+      { x: 140, y: 490, id: 'l4' },
+      { x: 140, y: 410, id: 'l5' },
+    ],
+  },
+};
+
 export default class Game extends Phaser.Scene {
   preload() {
 
@@ -270,33 +313,31 @@ socket.on('updateName', (data, playernum) => {
 })
 
     // ------------------ Players Marbles creation ------------------------
-    // Top Marbles
-    let t1 = playerMarble(this, 370, 100, 'sphere', 'g', 't1')
-    let t2 = playerMarble(this, 370, 140, 'sphere', 'g', 't2')
-    let t3 = playerMarble(this, 370, 180, 'sphere', 'g', 't3')
-    let t4 = playerMarble(this, 330, 140, 'sphere', 'g', 't4')
-    let t5 = playerMarble(this, 410, 140, 'sphere', 'g', 't5')
+    this.marblesBySide = {
+      top: [],
+      right: [],
+      bottom: [], 
+      left: [],
+    };
 
-    // Right Marbles
-    let r1 = playerMarble(this, 710, 370, 'sphere', 'b', 'r1')
-    let r2 = playerMarble(this, 670, 370, 'sphere', 'b', 'r2')
-    let r3 = playerMarble(this, 630, 370, 'sphere', 'b', 'r3')
-    let r4 = playerMarble(this, 670, 330, 'sphere', 'b', 'r4')
-    let r5 = playerMarble(this, 670, 410, 'sphere', 'b', 'r5')
+    Object.entries(MARBLE_LAYOUT).forEach(([side, cfg]) => {
+      cfg.positions.forEach(pos => {
+        const marble = playerMarble(this, pos.x, pos.y, 'sphere', cfg.color, pos.id);
 
-    // Bottom Marbles
-    let b1 = playerMarble(this, 450, 720, 'sphere', 'r', 'b1')
-    let b2 = playerMarble(this, 450, 680, 'sphere', 'r', 'b2')
-    let b3 = playerMarble(this, 450, 640, 'sphere', 'r', 'b3')
-    let b4 = playerMarble(this, 490, 680, 'sphere', 'r', 'b4')
-    let b5 = playerMarble(this, 410, 680, 'sphere', 'r', 'b5')
+        //Add metadata for later logic
+        marble.side = side;  // "top", "right", "bottom", "left"
+        marble.color = cfg.color; // "g", "b", "r", "y"
+        marble.id = pos.id; // "t1", "t2", ..., "l5"
 
-    // Left Marbles
-    let l1 = playerMarble(this, 100, 450, 'sphere', 'y', 'l1')
-    let l2 = playerMarble(this, 140, 450, 'sphere', 'y', 'l2')
-    let l3 = playerMarble(this, 180, 450, 'sphere', 'y', 'l3')
-    let l4 = playerMarble(this, 140, 490, 'sphere', 'y', 'l4')
-    let l5 = playerMarble(this, 140, 410, 'sphere', 'y', 'l5')
+        this.marblesBySide[side].push(marble);
+      });
+    });
+
+    const [t1, t2, t3, t4, t5] = this.marblesBySide.top;
+    const [r1, r2, r3, r4, r5] = this.marblesBySide.right;
+    const [b1, b2, b3, b4, b5] = this.marblesBySide.bottom;   
+    const [l1, l2, l3, l4, l5] = this.marblesBySide.left;
+
 
     // Create Modal
     const modal = new Modal(this, 400, 400, 300, 300, '', socket);
