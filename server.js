@@ -5,17 +5,10 @@ import { createServer } from "http";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import path from "path";
+import { createHands, isAlphanumeric, shuffle } from "./src/helpers/gameutils.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const options = {
-  transports: ["websockets"],
-  allowUpgrades: false,
-  pingInterval: 30000,
-  pingTimeout: 60000,
-  cookie: false
-}
-
 const app = express();
 const server = createServer(app);
 const io = new Server(server, {
@@ -43,7 +36,7 @@ io.on("connection", (socket) => {
     let playerNum = data.playerNum
     let socketID = data.socketId
     console.log('socket ID =====', data)
-    let passed = checkforalphanumberic(roomName, userName)
+    const passed = isAlphanumeric(roomName) && isAlphanumeric(userName)
     socket.join(roomName);
     socket.join(socketID)
     console.log("join server", roomName, userName, playerNum, passed, getClientCount(roomName), socketID)
@@ -260,15 +253,6 @@ io.on("connection", (socket) => {
 });
 // ----- FUNCTION Section -----------
 
-function checkforalphanumberic(rmName, userNam){
-  const alphanumericRegex = /^[a-zA-Z0-9]+$/;
-  if (!alphanumericRegex.test(rmName) || !alphanumericRegex.test(userNam)) {
-   return false  // An invalid character has been found
-  } else
-  return true
-
-}
-
 function exist(playerNum, room){
   let roomusers = users.filter((e) => e.gameName === room);
   let check = roomusers.some((user) => user.playernum === playerNum);
@@ -304,45 +288,4 @@ function getClientCount(roomName) {
     return room.size;
   }
   return 0;
-}
-
-function createHands() {
-
-      let originalDeck = ['2c', '2d', '2h', '2s', '3c', '3d', '3h', '3s', '4c', '4d', '4h', '4s', '5c', '5d', '5h', '5s',
-      '6c', '6d', '6h', '6s', '7c', '7d', '7h', '7s', '8c', '8d', '8h', '8s','9c', '9d', '9h', '9s', '10c', '10d', '10h', '10s',
-      'jc', 'jd', 'jh', 'js', 'qc', 'qd', 'qh', 'qs', 'kc', 'kd', 'kh', 'ks', 'ac', 'ad', 'ah', 'as', 'bj', 'rj',
-      '22c', '22d', '22h', '22s', '33c', '33d', '33h', '33s', '44c', '44d', '44h', '44s', '55c', '55d', '55h', '55s',
-      '66c', '66d', '66h', '66s', '77c', '77d', '77h', '77s', '88c', '88d', '88h', '88s', '99c', '99d', '99h', '99s', '110c', '110d', '110h', '110s',
-      'jjc', 'jjd', 'jjh', 'jjs', 'qqc', 'qqd', 'qqh', 'qqs', 'kkc', 'kkd', 'kkh', 'kks', 'aac', 'aad', 'aah', 'aas', 'bbj', 'rrj'];
-
-  shuffle(originalDeck);
-  let gameDeck = [...originalDeck]
-  let hand1 = [];
-  let hand2 = [];
-  let hand3 = [];
-  let hand4 = [];
-  let cardsplayed = [];
-  for (var i = 0; i < 6; i++) {
-      hand1.push(gameDeck[0]);
-      gameDeck.shift();
-      hand2.push(gameDeck[0]);
-      gameDeck.shift();
-      hand3.push(gameDeck[0]);
-      gameDeck.shift();
-      hand4.push(gameDeck[0]);
-      gameDeck.shift();
-  }
-  return {hand1, hand2, hand3, hand4, gameDeck, cardsplayed};
-}
-
-function shuffle(arra1) {
-  let ctr = arra1.length, temp, index;
-  while (ctr > 0) {
-      index = Math.floor(Math.random() * ctr);
-      ctr--;
-      temp = arra1[ctr];
-      arra1[ctr] = arra1[index];
-      arra1[index] = temp;
-  }
-  return arra1;
 }
