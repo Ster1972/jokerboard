@@ -31,9 +31,13 @@ export default {
     },
 
     replaceTrack( stream, recipientPeer ) {
-        let sender = recipientPeer.getSenders ? recipientPeer.getSenders().find( s => s.track && s.track.kind === stream.kind ) : false;
+        if (!stream || !recipientPeer?.getSenders) return;
 
-        sender ? sender.replaceTrack( stream ) : '';
+        const sender = recipientPeer.getSenders().find((item) =>
+            item.track && item.track.kind === stream.kind
+        );
+
+        if (sender) sender.replaceTrack(stream);
     },
 
 

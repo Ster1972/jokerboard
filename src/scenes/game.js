@@ -83,7 +83,7 @@ export default class Game extends Phaser.Scene {
     let socId = ''
 
     // add dom to scene - used for WEBRTC stuff 
-    const container = this.add.dom(1375, 250).createFromCache('videodom');
+    this.add.dom(1375, 250).createFromCache('videodom');
 
     // Circle for connected players
     let c1 = this.add.circle(975, 105, 11, 0x000000)
@@ -108,7 +108,10 @@ export default class Game extends Phaser.Scene {
         console.log('data recieved from server: ', users)
         let playerobj = users.filter((e) => e.player === userName);
         console.log('playerobj', playerobj)
-        sessionStorage.setItem("playerNum", playerobj[0].playernum);
+        if (playerobj[0]) {
+          playerNum = playerobj[0].playernum;
+          sessionStorage.setItem("playerNum", playerNum);
+        }
 
         let pp1 = users.some(p => p.playernum === '1')
         let pp2 = users.some(p => p.playernum === '2')
@@ -217,27 +220,30 @@ socket.on( 'sdp', async ( data ) => {
 
 document.getElementById('toggle-video').addEventListener('click', (e) => {e.preventDefault();
 
+  if (!myStream) return;
   let iconVideo = document.getElementById('buttonVideo')
-  if (myStream.getVideoTracks()[0].enabled){
+  const videoTrack = myStream.getVideoTracks()[0];
+  if (!videoTrack) return;
+  if (videoTrack.enabled){
     if (e.target.classList.contains('btn-secondary')){
     iconVideo.className = 'bi bi-camera-video-off-fill'
-    myStream.getVideoTracks()[0].enabled = false;
+    videoTrack.enabled = false;
     }
     else if (e.target.classList.contains('bi-camera-video-fill') || e.target.classList.contains('btn-secondary')){
       e.target.classList.remove('bi-camera-video-fill');
       e.target.classList.add('bi-camera-video-off-fill');
-      myStream.getVideoTracks()[0].enabled = false;
+      videoTrack.enabled = false;
       }
     }
   else {
     if (e.target.classList.contains('btn-secondary')){
         iconVideo.className = 'bi bi-camera-video-fill'
-        myStream.getVideoTracks()[0].enabled = true;
+        videoTrack.enabled = true;
     }
     else if(e.target.classList.contains('bi-camera-video-off-fill') || e.target.classList.contains('btn-secondary')){
         e.target.classList.remove('bi-camera-video-off-fill');
         e.target.classList.add('bi-camera-video-fill');
-        myStream.getVideoTracks()[0].enabled = true;
+        videoTrack.enabled = true;
     }
   }
 broadcastNewTracks(myStream, 'video')
@@ -248,27 +254,30 @@ broadcastNewTracks(myStream, 'video')
 //When the audio mute icon is clicked
 document.getElementById('toggle-mute').addEventListener('click', (e) => {
 e.preventDefault();
+if (!myStream) return;
 let iconAudio = document.getElementById('buttonAudio')
-  if (myStream.getAudioTracks()[0].enabled){
+const audioTrack = myStream.getAudioTracks()[0];
+if (!audioTrack) return;
+  if (audioTrack.enabled){
     if (e.target.classList.contains('btn-secondary')){
       iconAudio.className = 'bi bi-mic-mute-fill'
-      myStream.getAudioTracks()[0].enabled = false;
+      audioTrack.enabled = false;
     }
     else if (e.target.classList.contains('bi-mic-fill')){
       e.target.classList.remove('bi-mic-fill');
       e.target.classList.add('bi-mic-mute-fill');
-      myStream.getAudioTracks()[0].enabled = false;
+      audioTrack.enabled = false;
       }
   }
   else {
     if (e.target.classList.contains('btn-secondary')){
         iconAudio.className = 'bi bi-mic-fill'
-        myStream.getAudioTracks()[0].enabled = true;
+        audioTrack.enabled = true;
     }
     else if(e.target.classList.contains('bi-mic-mute-fill')){
         e.target.classList.remove('bi-mic-mute-fill');
         e.target.classList.add('bi-mic-fill');
-        myStream.getAudioTracks()[0].enabled = true;
+        audioTrack.enabled = true;
     }
   }
 broadcastNewTracks(myStream, 'audio')
@@ -525,6 +534,11 @@ socket.on('updateName', (data, playernum) => {
 
     socket.on('updateGameState', (data, cardhand, lastcardplayed) => {
      //console.log('game update recieved::::: ----->', cardhand, lastcardplayed )
+      for (const card of playershand) card.destroy();
+      for (const card of cards_in_dropZone) card.destroy();
+      playershand = []
+      cards_in_dropZone = []
+
       if (data.length !== 0) {
         t1.x = data[0][1].x, t1.y = data[0][1].y, t2.x = data[0][2].x, t2.y = data[0][2].y
         t3.x = data[0][3].x, t3.y = data[0][3].y, t4.x = data[0][4].x, t4.y = data[0][4].y, t5.x = data[0][5].x, t5.y = data[0][5].y
@@ -537,13 +551,9 @@ socket.on('updateName', (data, playernum) => {
         this.colorsturn.text = data[0][21]
         this.resetGame.setVisible(data[0][22])
       }
-      playershand = []
-      cards_in_dropZone = []
-
     // redisplay players hand
       if(cardhand.length !== 0){
-
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < cardhand.length; i++) {
           let playerCard = new Card(this);
           let obj = playerCard.render(900 + (i * 50), 680, 'cards', cardhand[i]).setDepth(i)
           obj.name = cardhand[i]
@@ -553,7 +563,7 @@ socket.on('updateName', (data, playernum) => {
       }
     
     // redisplay DropZone card
-      if(lastcardplayed.length !== 0){
+      if(lastcardplayed && lastcardplayed.length !== 0){
         let playerCard = new Card(this);
         let obj = playerCard.render(1025, 375, 'cards', lastcardplayed)
         obj.setDepth(100).disableInteractive({ useHandCursor: false, draggable: false})
@@ -918,10 +928,10 @@ socket.on('updateName', (data, playernum) => {
 function init( createOffer, partnerName ) {
   console.log("init- create offer",partnerName)
   let ice
-  socket.emit('getIceServer_Info')
-  socket.on('iceserver', (data) =>{
+  socket.once('iceserver', (data) =>{
     ice = data
   })
+  socket.emit('getIceServer_Info')
   pc[partnerName] = new RTCPeerConnection( ice );
   console.log("*****: ",pc[partnerName])
   if ( screen && screen.getTracks().length ) {
@@ -1027,12 +1037,11 @@ function broadcastNewTracks( stream, type, mirrorMode = true ) {
   h.setLocalStream( stream, mirrorMode );
 
   let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+  if (!track) return;
 
-  for ( let p in pc ) {
-      let pName = pc[p];
-
-      if ( typeof pc[pName] == 'object' ) {
-          h.replaceTrack( track, pc[pName] );
+  for (const peer of Object.values(pc)) {
+      if (peer && typeof peer === 'object') {
+          h.replaceTrack(track, peer);
       }
   }
 }

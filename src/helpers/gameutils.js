@@ -18,6 +18,7 @@ const ORIGINAL_DECK = [
 ];
 
 export function isAlphanumeric(value) {
+  if (typeof value !== "string") return false;
   return /^[a-zA-Z0-9]+$/.test(value);
 }
 
