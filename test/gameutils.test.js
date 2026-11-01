@@ -3,6 +3,20 @@ import assert from "node:assert/strict";
 
 import { createHands, isAlphanumeric, shuffle } from "../src/helpers/gameutils.js";
 import { RoomGameStore } from "../src/helpers/serverstate.js";
+import { getNearestBoardHole } from "../src/helpers/boardholes.js";
+
+test("getNearestBoardHole returns the exact center of the nearest hole", () => {
+  const gameBoard = {
+    getChildren: () => [
+      { x: 50, y: 90 },
+      { x: 370, y: 100 },
+      { x: 450, y: 720 }
+    ]
+  };
+
+  assert.deepEqual(getNearestBoardHole(gameBoard, 368, 101), { x: 370, y: 100 });
+  assert.equal(getNearestBoardHole(gameBoard, 5, 5), null);
+});
 
 test("isAlphanumeric preserves the room and username validation contract", () => {
   assert.equal(isAlphanumeric("Room123"), true);

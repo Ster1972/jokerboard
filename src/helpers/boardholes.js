@@ -2,6 +2,24 @@
 // h1 is the gray hole
 // h2 is the black hole
 
+export function getNearestBoardHole(gameBoard, x, y, maxDistance = 25) {
+    if (!gameBoard?.getChildren) return null;
+
+    let nearestHole = null;
+    let nearestDistance = Infinity;
+
+    for (const hole of gameBoard.getChildren()) {
+        const distance = Math.hypot(hole.x - x, hole.y - y);
+        if (distance < nearestDistance) {
+            nearestDistance = distance;
+            nearestHole = hole;
+        }
+    }
+
+    if (!nearestHole || nearestDistance > maxDistance) return null;
+    return { x: nearestHole.x, y: nearestHole.y };
+}
+
 export default function boardHole(scene){
     
     const gameBoard = scene.physics.add.group({ immovable: true }) //Creat group for gameBoard

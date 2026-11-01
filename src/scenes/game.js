@@ -1,6 +1,6 @@
 "use strict";
 import playerMarble from "../helpers/playerballs.js";
-import boardHole from "../helpers/boardholes.js";
+import boardHole, { getNearestBoardHole } from "../helpers/boardholes.js";
 import Modal from "../helpers/modal.js"
 import Zone from "../helpers/zone.js"
 import Card from "../helpers/cards.js"
@@ -54,6 +54,7 @@ export default class Game extends Phaser.Scene {
   preload() {
 
     this.load.html('videodom', '/src/scenes/video.html');
+    this.load.image('origin-marker', '/src/images/origin-marker.png');
 
     this.load.atlas(
       "sphere",
@@ -393,7 +394,10 @@ socket.on('updateName', (data, playernum) => {
    const customModalFour = new CustomModal(this, socket, 4, playerName4Text);
 
 
-    this.textMarker = this.add.text(0, 0, '*', { color: 'white', fontSize: 'bold 60px', align: 'center'}).setOrigin(0.5);
+    this.textMarker = this.add.image(0, 0, 'origin-marker')
+      .setOrigin(0.5)
+      .setDisplaySize(21, 21);
+    this.textMarker.setDepth(1000);
     this.textMarker.setVisible(false);
 
     this.colorsturn = this.add.text(1025, 190, '', { color: 'white', fontSize: 'bold 30px', align: 'center' }).setOrigin(0.5)
@@ -462,8 +466,13 @@ socket.on('updateName', (data, playernum) => {
     });
 
     socket.on("marker", (posX, posY) => {
-      this.textMarker.setPosition(posX, posY);
+      const sourceHole = getNearestBoardHole(gameBoard, posX, posY);
+      this.textMarker.setPosition(
+        sourceHole ? sourceHole.x : posX,
+        sourceHole ? sourceHole.y : posY
+      );
       this.textMarker.setVisible(true);
+      this.children.bringToTop(this.textMarker);
     })
 
     socket.on("snapMarbleServer", (obj) => {
@@ -490,6 +499,7 @@ socket.on('updateName', (data, playernum) => {
 
   socket.on('startNewGame', () => {
     this.resetGame.setVisible(false)
+    this.textMarker.setVisible(false)
     if(playershand.length > 0) {
       for (let i = 0; i < playershand.length; i++) {
         playershand[i].destroy()
@@ -588,9 +598,20 @@ socket.on('updateName', (data, playernum) => {
     this.input.on("dragstart",  (pointer, gameObject) => {
       this.children.bringToTop(gameObject)
       if(keys.includes(gameObject.name)){
-        this.textMarker.setPosition(gameObject.x, gameObject.y+5);
+        const sourceX = gameObject.input.dragStartX ?? gameObject.x;
+        const sourceY = gameObject.input.dragStartY ?? gameObject.y;
+        const sourceHole = getNearestBoardHole(
+          gameBoard,
+          sourceX,
+          sourceY
+        );
+        const markerX = sourceHole ? sourceHole.x : sourceX;
+        const markerY = sourceHole ? sourceHole.y : sourceY;
+
+        this.textMarker.setPosition(markerX, markerY);
         this.textMarker.setVisible(true);
-        socket.emit('markerclient', gameObject.x, gameObject.y+5)
+        this.children.bringToTop(this.textMarker);
+        socket.emit('markerclient', markerX, markerY)
       }
      });
 
