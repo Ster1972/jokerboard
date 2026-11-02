@@ -24,17 +24,23 @@ export class RoomGameStore {
     );
   }
 
-  reconnectUser(roomName, playerName, socketId) {
+  reconnectUser(roomName, playerName, socketId, sessionToken) {
+    if (!sessionToken) return undefined;
     const user = this.users.find((item) =>
       item.gameName === roomName &&
       item.player === playerName &&
-      item.connected === false
+      item.connected === false &&
+      item.sessionToken === sessionToken
     );
 
     if (!user) return undefined;
 
     user.id = socketId;
     user.connected = true;
+    if (user.disconnectTimer) {
+      clearTimeout(user.disconnectTimer);
+      user.disconnectTimer = undefined;
+    }
     return user;
   }
 
@@ -43,6 +49,15 @@ export class RoomGameStore {
     if (!user) return undefined;
 
     user.connected = false;
+    if (user.disconnectTimer) clearTimeout(user.disconnectTimer);
+    user.disconnectTimer = setTimeout(() => {
+      this.removeUser(id);
+      if (this.getUsersInRoom(user.gameName).length === 0) {
+        this.removeCardState(user.gameName);
+        const marbleIndex = this.marbleStates.findIndex((state) => state[0] === user.gameName);
+        if (marbleIndex !== -1) this.marbleStates.splice(marbleIndex, 1);
+      }
+    }, 5 * 60 * 1000);
     return user;
   }
 
@@ -113,6 +128,7 @@ export class RoomGameStore {
     };
     const hand = handByPlayer[board];
     if (!hand || pos >= hand.length) return null;
+    if (hand[pos] !== gameObj) return null;
 
     cardState.cardsplayed.push(gameObj);
     cardState.lastCardPlayed = gameObj;

@@ -76,17 +76,17 @@ test("RoomGameStore replaces a played card and recycles an empty deck", () => {
     cardsplayed: []
   });
 
-  assert.equal(store.playCard("room1", "a", 1, 1), "g");
-  assert.deepEqual(store.getCardState("room1").hand1, ["a", "g", "c"]);
+  assert.equal(store.playCard("room1", "a", 1, 0), "g");
+  assert.deepEqual(store.getCardState("room1").hand1, ["g", "b", "c"]);
 
-  const recycledCard = store.playCard("room1", "g", 1, 1);
+  const recycledCard = store.playCard("room1", "g", 1, 0);
   assert.ok(["a", "g"].includes(recycledCard));
-  assert.equal(store.getCardState("room1").hand1[1], recycledCard);
+  assert.equal(store.getCardState("room1").hand1[0], recycledCard);
 });
 
 test("RoomGameStore preserves player identity and game state across reconnect", () => {
   const store = new RoomGameStore();
-  store.addUser({ gameName: "room1", player: "Ada", id: "socket-old", playernum: "2" });
+  store.addUser({ gameName: "room1", player: "Ada", id: "socket-old", playernum: "2", sessionToken: "token-a" });
   store.updateMarbleState(["room1", { x: 370, y: 100 }]);
   store.setCardState({
     roomName: "room1",
@@ -102,13 +102,13 @@ test("RoomGameStore preserves player identity and game state across reconnect", 
   assert.equal(disconnected.connected, false);
   assert.equal(store.getUsersInRoom("room1").length, 0);
 
-  const reconnected = store.reconnectUser("room1", "Ada", "socket-new");
+  const reconnected = store.reconnectUser("room1", "Ada", "socket-new", "token-a");
   assert.equal(reconnected.playernum, "2");
   assert.equal(reconnected.connected, true);
   assert.equal(store.getUsersInRoom("room1").length, 1);
   assert.equal(store.getMarbleStates("room1").length, 1);
   assert.deepEqual(store.getCardState("room1").hand2, ["b", "c"]);
 
-  store.playCard("room1", "played-card", 2, 1);
-  assert.equal(store.getCardState("room1").lastCardPlayed, "played-card");
+  store.playCard("room1", "b", 2, 0);
+  assert.equal(store.getCardState("room1").lastCardPlayed, "b");
 });

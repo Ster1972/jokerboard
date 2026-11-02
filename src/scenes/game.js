@@ -79,9 +79,10 @@ export default class Game extends Phaser.Scene {
     let newcardplayed = false
     let answer = ''
     let myStream = ''
-    let pc = []
+    let pc = {}
     let screen = ''
     let socId = ''
+    let sessionToken = sessionStorage.getItem("sessionToken") || ""
 
     // add dom to scene - used for WEBRTC stuff 
     this.add.dom(1375, 250).createFromCache('videodom');
@@ -104,7 +105,15 @@ export default class Game extends Phaser.Scene {
         roomName: roomName,
         userName: userName, 
         playerNum: playerNum, 
-        socketId: socId });
+        socketId: socId,
+        sessionToken });
+      socket.on("session", (session) => {
+        if (!session) return;
+        playerNum = session.playerNum;
+        sessionToken = session.sessionToken;
+        sessionStorage.setItem("playerNum", playerNum);
+        sessionStorage.setItem("sessionToken", sessionToken);
+      });
       socket.on("connectToRoom", (users) => {
         console.log('data recieved from server: ', users)
         let playerobj = users.filter((e) => e.player === userName);
@@ -182,12 +191,29 @@ export default class Game extends Phaser.Scene {
   } );
 
 socket.on( 'ice candidates', async ( data ) => {
-  data.candidate ? await pc[data.sender].addIceCandidate( new RTCIceCandidate( data.candidate ) ) : '';
+ const peer = pc[data.sender];
+ if (!peer || !data.candidate) return;
+ if (!peer.remoteDescription) {
+   peer.pendingCandidates ||= [];
+   peer.pendingCandidates.push(data.candidate);
+   return;
+ }
+ try {
+   await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+ } catch (error) {
+   console.error("ICE candidate rejected:", error);
+ }
 } );
 
 socket.on( 'sdp', async ( data ) => {
   if ( data.description.type === 'offer' ) {
       data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+      if (pc[data.sender].pendingCandidates) {
+        for (const candidate of pc[data.sender].pendingCandidates) {
+          await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+        }
+        pc[data.sender].pendingCandidates.length = 0;
+      }
 
       h.getUserFullMedia().then( async ( stream ) => {
           if ( !document.getElementById( 'local' ).srcObject ) {
@@ -213,6 +239,12 @@ socket.on( 'sdp', async ( data ) => {
 
   else if ( data.description.type === 'answer' ) {
       await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
+      if (pc[data.sender].pendingCandidates) {
+        for (const candidate of pc[data.sender].pendingCandidates) {
+          await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
+        }
+        pc[data.sender].pendingCandidates.length = 0;
+      }
   }
 } );
 
@@ -286,6 +318,10 @@ broadcastNewTracks(myStream, 'audio')
 
 socket.on('user-disconnected', (userId, playernum) => {
   console.log('user disconnected', userId, playernum, typeof playernum)
+  if (pc[userId] && typeof pc[userId].close === "function") {
+    pc[userId].close();
+    delete pc[userId];
+  }
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
       if(playernum === '1') {
@@ -946,13 +982,19 @@ socket.on('updateName', (data, playernum) => {
   } );
 }
 
-function init( createOffer, partnerName ) {
+async function init( createOffer, partnerName ) {
   console.log("init- create offer",partnerName)
-  let ice
-  socket.once('iceserver', (data) =>{
-    ice = data
-  })
-  socket.emit('getIceServer_Info')
+  if (pc[partnerName] && pc[partnerName].close) {
+    pc[partnerName].close();
+    delete pc[partnerName];
+  }
+  const ice = await new Promise((resolve) => {
+    socket.emit('getIceServer_Info', resolve);
+  });
+  if (!ice) {
+    console.error("ICE server configuration unavailable");
+    return;
+  }
   pc[partnerName] = new RTCPeerConnection( ice );
   console.log("*****: ",pc[partnerName])
   if ( screen && screen.getTracks().length ) {
@@ -1034,6 +1076,8 @@ function init( createOffer, partnerName ) {
           case 'disconnected':
           case 'failed':
               h.closeVideo( partnerName );
+              pc[partnerName].close();
+              delete pc[partnerName];
               break;
 
           case 'closed':
@@ -1072,6 +1116,17 @@ function broadcastNewTracks( stream, type, mirrorMode = true ) {
 //============================================
     
   } // --- end of PHASER CREATE function
+
+  shutdown() {
+    for (const peer of Object.values(pc)) {
+      if (peer && typeof peer.close === "function") peer.close();
+    }
+    pc = {};
+    if (myStream) {
+      myStream.getTracks().forEach((track) => track.stop());
+    }
+    socket.disconnect();
+  }
 
   update() { }
 }
