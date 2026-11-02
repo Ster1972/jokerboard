@@ -180,11 +180,6 @@ io.on("connection", (socket) => {
       socket.to(roomName).emit('closeModalBox')
     })
 
-    socket.on("snapMarbleclient", (obj) => {
-        if (!checkLimit(socket, "snap", 30, 1000) || !isValidGameObject(obj)) return;
-        socket.to(roomName).emit("snapMarbleServer", { name: obj.name, x: obj.x, y: obj.y });
-    });
-
     socket.on('winner', (data) => {
       if (data !== "gr" && data !== "yb") return;
       io.in(roomName).emit('winners', data)
@@ -205,14 +200,10 @@ io.on("connection", (socket) => {
     })
 
 
-    socket.on('player', (obj) => {
-        if (!checkLimit(socket, "player", 60, 1000) || !isValidGameObject(obj)) return;
-        socket.to(roomName).emit('otherplayer', { name: obj.name, x: obj.x, y: obj.y });
-    })
-
     socket.on('dealCardsclient', () => {
        const member = store.getUserById(socket.id);
-       if (!member || member.playernum !== "1") return;
+       if (!member) return;
+       if (!checkLimit(socket, "dealCards", 1, 1000)) return;
        const guests = store.getUsersInRoom(roomName);
        if(guests.length !== 4){
         console.log("number of players not equal to 4")

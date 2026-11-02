@@ -86,6 +86,7 @@ export default class Game extends Phaser.Scene {
     const movementIntervalMs = 1000 / 30
     let lastMovementSentAt = 0
     let lastSentMarblePosition = null
+    let peerRecoveryTimers = new Map()
 
     // add dom to scene - used for WEBRTC stuff 
     this.add.dom(1375, 250).createFromCache('videodom');
@@ -173,6 +174,10 @@ export default class Game extends Phaser.Scene {
       modal.setMessage('The game has detected that you are having a network issue. Please wait for the GREEN indicators to return.\n\n');
       modal.show(); 
 
+      for (const partnerName of Object.keys(pc)) {
+        closePeerConnection(partnerName, true);
+      }
+
       c1.fillColor = 0x000000
       c2.fillColor = 0x000000
       c3.fillColor = 0x000000
@@ -191,13 +196,11 @@ export default class Game extends Phaser.Scene {
 
  socket.on( 'new user', ( data ) => {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
-  pc.push( data.socketId );
   init( true, data.socketId );
  } );
 
 
   socket.on( 'newUserStart', ( data ) => {
-    pc.push( data.sender );
     init( false, data.sender );
   } );
 
@@ -329,10 +332,7 @@ broadcastNewTracks(myStream, 'audio')
 
 socket.on('user-disconnected', (userId, playernum) => {
   console.log('user disconnected', userId, playernum, typeof playernum)
-  if (pc[userId] && typeof pc[userId].close === "function") {
-    pc[userId].close();
-    delete pc[userId];
-  }
+  closePeerConnection(userId, true);
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
       if(playernum === '1') {
@@ -755,7 +755,6 @@ socket.on('updateName', (data, playernum) => {
       this.children.bringToTop(this.gameObject)
       this.gameObject.x = groupObj.x
       this.gameObject.y = groupObj.y
-      socket.emit('snapMarbleclient', this.gameObject)
     }
     
     let yellowBlueMarbles = (obj, playersmarble) => {
@@ -900,13 +899,11 @@ socket.on('updateName', (data, playernum) => {
     function move_partners_Marble(item) {
         item.x = item.getData('homeX')
         item.y = item.getData('homeY')
-        socket.emit('player', item)
     }
 
     function move_opponets_Marble(item) {
         item.x = item.getData('X')
         item.y = item.getData('Y')
-        socket.emit('player', item)
     }
 
 
@@ -915,7 +912,6 @@ socket.on('updateName', (data, playernum) => {
         obj.y = pos.y
         pos.x = pos.getData('X')
         pos.y = pos.getData('Y')
-        socket.emit('player', pos)
     }
 
     function playerHome(pos, obj) {
@@ -923,7 +919,6 @@ socket.on('updateName', (data, playernum) => {
         obj.y = pos.y
         pos.x = pos.getData('homeX')
         pos.y = pos.getData('homeY')
-        socket.emit('player', pos)
     }
 
     let playersturn = (obj, greenfull, yellowfull, redfull, bluefull) => {
@@ -1012,12 +1007,33 @@ socket.on('updateName', (data, playernum) => {
   } );
 }
 
-async function init( createOffer, partnerName ) {
-  console.log("init- create offer",partnerName)
-  if (pc[partnerName] && pc[partnerName].close) {
-    pc[partnerName].close();
-    delete pc[partnerName];
+ function closePeerConnection(partnerName, removeVideo = true) {
+   const timer = peerRecoveryTimers.get(partnerName);
+   if (timer) {
+     clearTimeout(timer);
+     peerRecoveryTimers.delete(partnerName);
   }
+
+   const peer = pc[partnerName];
+   if (peer) {
+     peer.onicecandidate = null;
+     peer.onnegotiationneeded = null;
+     peer.ontrack = null;
+     peer.onconnectionstatechange = null;
+     peer.onsignalingstatechange = null;
+     if (typeof peer.close === "function") peer.close();
+     delete pc[partnerName];
+   }
+
+   if (removeVideo) h.closeVideo(`${partnerName}-video`);
+ }
+
+ async function init( createOffer, partnerName ) {
+   console.log("init- create offer",partnerName)
+   if (pc[partnerName] && ["connected", "connecting", "new"].includes(pc[partnerName].connectionState)) {
+     return;
+   }
+   closePeerConnection(partnerName, true);
   const ice = await new Promise((resolve) => {
     socket.emit('getIceServer_Info', resolve);
   });
@@ -1102,16 +1118,26 @@ async function init( createOffer, partnerName ) {
 
 
   pc[partnerName].onconnectionstatechange = ( d ) => {
-      switch ( pc[partnerName].iceConnectionState ) {
-          case 'disconnected':
-          case 'failed':
-              h.closeVideo( partnerName );
-              pc[partnerName].close();
-              delete pc[partnerName];
-              break;
+      const peer = pc[partnerName];
+      if (!peer) return;
 
+      switch (peer.connectionState || peer.iceConnectionState) {
+          case 'connected':
+              const existingTimer = peerRecoveryTimers.get(partnerName);
+              if (existingTimer) {
+                clearTimeout(existingTimer);
+                peerRecoveryTimers.delete(partnerName);
+              }
+              break;
+          case 'disconnected':
+              if (peerRecoveryTimers.has(partnerName)) break;
+              peerRecoveryTimers.set(partnerName, setTimeout(() => {
+                closePeerConnection(partnerName, true);
+              }, 5000));
+              break;
+          case 'failed':
           case 'closed':
-              h.closeVideo( partnerName );
+              closePeerConnection(partnerName, true);
               break;
       }
   };
@@ -1122,7 +1148,7 @@ async function init( createOffer, partnerName ) {
       switch ( pc[partnerName].signalingState ) {
           case 'closed':
               //console.log( "Signalling state is 'closed'" );
-              h.closeVideo( partnerName );
+              closePeerConnection(partnerName, true);
               break;
       }
   };
@@ -1151,6 +1177,11 @@ function broadcastNewTracks( stream, type, mirrorMode = true ) {
     for (const peer of Object.values(pc)) {
       if (peer && typeof peer.close === "function") peer.close();
     }
+    for (const partnerName of Object.keys(pc)) {
+      h.closeVideo(`${partnerName}-video`);
+    }
+    for (const timer of peerRecoveryTimers.values()) clearTimeout(timer);
+    peerRecoveryTimers.clear();
     pc = {};
     if (myStream) {
       myStream.getTracks().forEach((track) => track.stop());
