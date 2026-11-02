@@ -13,6 +13,10 @@ export default class CustomModal extends Phaser.GameObjects.Container {
     const options = { fill: "#ffffff", font: "22px Arial"};
     this.nameInput = this.scene.add.dom(52, 20, 'input', options);
     this.nameInput.node.placeholder = 'Enter a new name...';
+    this.nameInput.node.id = `player-name-${playerId}`;
+    this.nameInput.node.name = `playerName${playerId}`;
+    this.nameInput.node.type = 'text';
+    this.nameInput.node.autocomplete = 'name';
     this.add(this.nameInput);
 
      // Create the close button

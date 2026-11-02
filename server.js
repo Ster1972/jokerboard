@@ -62,6 +62,10 @@ io.on("connection", (socket) => {
     const sessionToken = data.sessionToken;
     const passed = isAlphanumeric(roomName) && isAlphanumeric(userName)
     if (!passed) return;
+    if (
+      socket.__jokerRoomName === roomName &&
+      socket.__jokerHandlersRegistered
+    ) return;
 
     socket.join(roomName);
     socket.join(socket.id);
@@ -94,6 +98,8 @@ io.on("connection", (socket) => {
       socket.emit('playerWarning');
       return;
     }
+    socket.__jokerRoomName = roomName;
+    socket.__jokerHandlersRegistered = true;
     const playerNum = sessionUser.playernum;
     socket.emit("session", { playerNum, sessionToken: sessionUser.sessionToken });
 

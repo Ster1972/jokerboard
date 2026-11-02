@@ -36,11 +36,11 @@
       <form>
         <div class="input-group mb-3">
           <span class="input-group-text">Player's Name</span>
-          <input type="text" class="form-control" id="name" required>
+          <input type="text" class="form-control" id="name" name="playerName" autocomplete="name" required>
         </div>
         <div class="input-group mb-3">
           <span class="input-group-text">Game Name</span>
-          <input type="text" class="form-control" id="roomid" required>
+          <input type="text" class="form-control" id="roomid" name="roomName" required>
         </div>
         <div class="text-center">
           <button type="button" class="btn btn-success mt-3 px-5" onclick="storeData()" ontouchend="storeData()">Play</button>

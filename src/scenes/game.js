@@ -83,6 +83,9 @@ export default class Game extends Phaser.Scene {
     let screen = ''
     let socId = ''
     let sessionToken = sessionStorage.getItem("sessionToken") || ""
+    const movementIntervalMs = 1000 / 30
+    let lastMovementSentAt = 0
+    let lastSentMarblePosition = null
 
     // add dom to scene - used for WEBRTC stuff 
     this.add.dom(1375, 250).createFromCache('videodom');
@@ -107,6 +110,10 @@ export default class Game extends Phaser.Scene {
         playerNum: playerNum, 
         socketId: socId,
         sessionToken });
+    });
+
+    if (!socket._jokerSessionListenerRegistered) {
+      socket._jokerSessionListenerRegistered = true;
       socket.on("session", (session) => {
         if (!session) return;
         playerNum = session.playerNum;
@@ -114,6 +121,10 @@ export default class Game extends Phaser.Scene {
         sessionStorage.setItem("playerNum", playerNum);
         sessionStorage.setItem("sessionToken", sessionToken);
       });
+    }
+
+    if (!socket._jokerRoomListenerRegistered) {
+      socket._jokerRoomListenerRegistered = true;
       socket.on("connectToRoom", (users) => {
         console.log('data recieved from server: ', users)
         let playerobj = users.filter((e) => e.player === userName);
@@ -156,7 +167,7 @@ export default class Game extends Phaser.Scene {
         }
         
         });
-    });
+    }
 
     socket.on('disconnect', () => {
       modal.setMessage('The game has detected that you are having a network issue. Please wait for the GREEN indicators to return.\n\n');
@@ -652,6 +663,17 @@ socket.on('updateName', (data, playernum) => {
      });
 
     this.input.on("dragend", (pointer, gameObject, dropped) => {
+      if (keys.includes(gameObject.name)) {
+        const finalPosition = {
+          name: gameObject.name,
+          x: gameObject.x,
+          y: gameObject.y
+        };
+        socket.emit("objMoveData", finalPosition);
+        lastSentMarblePosition = finalPosition;
+        lastMovementSentAt = performance.now();
+      }
+
       let ghf = homefull(t1, t2, t3, t4, t5, topHome)
       let bhf = homefull(r1, r2, r3, r4, r5, rightHome)
       let rhf = homefull(b1, b2, b3, b4, b5, bottomHome)
@@ -711,9 +733,17 @@ socket.on('updateName', (data, playernum) => {
       gameObject.x = dragX;
       gameObject.y = dragY;
       if (keys.includes(gameObject.name)) {
-        socket.emit("objMoveData", gameObject);
-    }
-  
+        const now = performance.now();
+        if (now - lastMovementSentAt >= movementIntervalMs) {
+          lastSentMarblePosition = {
+            name: gameObject.name,
+            x: gameObject.x,
+            y: gameObject.y
+          };
+          socket.volatile.emit("objMoveData", lastSentMarblePosition);
+          lastMovementSentAt = now;
+        }
+      }
     });
 
 
