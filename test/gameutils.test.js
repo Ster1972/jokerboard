@@ -112,3 +112,23 @@ test("RoomGameStore preserves player identity and game state across reconnect", 
   store.playCard("room1", "b", 2, 0);
   assert.equal(store.getCardState("room1").lastCardPlayed, "b");
 });
+
+test("RoomGameStore merges marble deltas into reconnect snapshots", () => {
+  const store = new RoomGameStore();
+  store.updateMarbleState(["room1", ...Array.from({ length: 20 }, (_, index) => ({
+    x: index,
+    y: index * 2
+  })), "green", false]);
+
+  const snapshot = store.updateMarbleDelta("room1", [
+    { name: "top3", x: 370, y: 100 },
+    { name: "right5", x: 450, y: 720 }
+  ], "yellow", true);
+
+  assert.equal(snapshot.length, 23);
+  assert.deepEqual(snapshot[3], { x: 370, y: 100 });
+  assert.deepEqual(snapshot[10], { x: 450, y: 720 });
+  assert.equal(snapshot[21], "yellow");
+  assert.equal(snapshot[22], true);
+  assert.equal(store.getMarbleStates("room1")[0][0], "room1");
+});

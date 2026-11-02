@@ -85,6 +85,44 @@ export class RoomGameStore {
     return this.marbleStates.filter((state) => state[0] === roomName);
   }
 
+  updateMarbleDelta(roomName, changes, turn, reset) {
+    const current = this.getMarbleStates(roomName)[0];
+    const MARBLE_SLOTS = [
+      "top1", "top2", "top3", "top4", "top5",
+      "right1", "right2", "right3", "right4", "right5",
+      "bottom1", "bottom2", "bottom3", "bottom4", "bottom5",
+      "left1", "left2", "left3", "left4", "left5"
+    ];
+
+    let next;
+    if (current && Array.isArray(current)) {
+      next = [roomName, ...current.slice(1, 21).map((marble) => ({
+        x: marble.x,
+        y: marble.y
+      }))];
+    } else {
+      next = [
+        roomName,
+        ...[
+          { x: 370, y: 100 }, { x: 370, y: 140 }, { x: 370, y: 180 }, { x: 330, y: 140 }, { x: 410, y: 140 },
+          { x: 710, y: 370 }, { x: 670, y: 370 }, { x: 630, y: 370 }, { x: 670, y: 330 }, { x: 670, y: 410 },
+          { x: 450, y: 720 }, { x: 450, y: 680 }, { x: 450, y: 640 }, { x: 490, y: 680 }, { x: 410, y: 680 },
+          { x: 100, y: 450 }, { x: 140, y: 450 }, { x: 180, y: 450 }, { x: 140, y: 490 }, { x: 140, y: 410 }
+        ]
+      ];
+    }
+
+    for (const change of changes) {
+      const index = MARBLE_SLOTS.indexOf(change.name);
+      if (index !== -1) next[index + 1] = { x: change.x, y: change.y };
+    }
+
+    next[21] = typeof turn === "string" ? turn.slice(0, 120) : "";
+    next[22] = Boolean(reset);
+    this.updateMarbleState(next);
+    return next;
+  }
+
   updateMarbleState(state) {
     const roomName = state[0];
     const index = this.marbleStates.findIndex((item) => item[0] === roomName);

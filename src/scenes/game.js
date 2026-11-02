@@ -459,6 +459,13 @@ socket.on('updateName', (data, playernum) => {
     }
 
     const keys = Object.keys(playerBallLookup)
+    const marbleSnapshotBaseline = new Map(
+      Object.entries(playerBallLookup).map(([name, marble]) => [
+        name,
+        { x: marble.x, y: marble.y }
+      ])
+    )
+    let marbleSnapshotSequence = 0
 
     // ---- Incoming socket data
 
@@ -512,6 +519,22 @@ socket.on('updateName', (data, playernum) => {
       this.gameObject.y = obj.y
     });
 
+    socket.on("marbleStateDelta", (delta) => {
+      if (!delta || !Array.isArray(delta.changes)) return;
+      if (!Number.isInteger(delta.sequence) || delta.sequence <= marbleSnapshotSequence) return;
+      marbleSnapshotSequence = delta.sequence;
+      for (const change of delta.changes) {
+        if (!change || typeof change.name !== "string") continue;
+        const marble = playerBallLookup[change.name];
+        if (!marble || !Number.isFinite(change.x) || !Number.isFinite(change.y)) continue;
+        marble.x = change.x;
+        marble.y = change.y;
+        marbleSnapshotBaseline.set(change.name, { x: change.x, y: change.y });
+      }
+      if (typeof delta.turn === "string") this.colorsturn.text = delta.turn;
+      if (typeof delta.reset === "boolean") this.resetGame.setVisible(delta.reset);
+    });
+
     socket.on("marker", (posX, posY) => {
       const sourceHole = getNearestBoardHole(gameBoard, posX, posY);
       this.textMarker.setPosition(
@@ -520,18 +543,6 @@ socket.on('updateName', (data, playernum) => {
       );
       this.textMarker.setVisible(true);
       this.children.bringToTop(this.textMarker);
-    })
-
-    socket.on("snapMarbleServer", (obj) => {
-      this.gameObject = playerBallLookup[obj.name]
-      this.gameObject.x = obj.x
-      this.gameObject.y = obj.y
-    })
-
-    socket.on('otherplayer', (obj) => {
-      this.gameObject = playerBallLookup[obj.name]
-      this.gameObject.x = obj.x
-      this.gameObject.y = obj.y
     })
 
     // cardPlayed - shows the card being played by the other player(s)
@@ -607,6 +618,9 @@ socket.on('updateName', (data, playernum) => {
         l3.x = data[0][18].x, l3.y = data[0][18].y, l4.x = data[0][19].x, l4.y = data[0][19].y, l5.x = data[0][20].x, l5.y = data[0][20].y
         this.colorsturn.text = data[0][21]
         this.resetGame.setVisible(data[0][22])
+        for (const [name, marble] of Object.entries(playerBallLookup)) {
+          marbleSnapshotBaseline.set(name, { x: marble.x, y: marble.y });
+        }
       }
     // redisplay players hand
       if(cardhand.length !== 0){
@@ -708,11 +722,23 @@ socket.on('updateName', (data, playernum) => {
           this.physics.world.overlap(gameObject, [l1, l2, l3, l4, l5, r1, r2, r3, r4, r5], yellowBlueMarbles)
           this.physics.world.overlap(gameObject, [t1,t2,t3,t4,t5,b1,b2,b3,b4,b5], greenRedMarbles)
           const newGameButtonStatus = this.resetGame.visible;
-          //console.log('reset status', newGameButtonStatus)
-          //-- updates the server on the marblestate which should be the same for everyone
-          this.marblestate = [roomName, t1, t2, t3, t4, t5, r1, r2, r3, r4, r5, b1, b2, b3, b4, b5, l1, l2, l3, l4, l5, this.colorsturn.text, newGameButtonStatus]
-         
-          socket.emit('marbleState', this.marblestate)
+          const changes = [];
+          for (const [name, marble] of Object.entries(playerBallLookup)) {
+            const baseline = marbleSnapshotBaseline.get(name);
+            if (!baseline || Math.abs(baseline.x - marble.x) > 0.01 || Math.abs(baseline.y - marble.y) > 0.01) {
+              changes.push({ name, x: marble.x, y: marble.y });
+            }
+          }
+          marbleSnapshotSequence++;
+          for (const change of changes) {
+            marbleSnapshotBaseline.set(change.name, { x: change.x, y: change.y });
+          }
+          socket.emit('marbleState', {
+            sequence: marbleSnapshotSequence,
+            changes,
+            turn: this.colorsturn.text,
+            reset: newGameButtonStatus
+          })
      }
      // -- updates the server on the marblestate of this player
       

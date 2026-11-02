@@ -26,6 +26,7 @@ server.listen(PORT, () => {
 
 const store = new RoomGameStore();
 const socketLimits = new Map();
+const marbleSnapshotSequences = new Map();
 
 function checkLimit(socket, event, limit = 30, windowMs = 1000) {
   const now = Date.now();
@@ -240,19 +241,36 @@ io.on("connection", (socket) => {
 
   socket.on("marbleState", (gamestatus) => {
     const member = store.getUserById(socket.id);
-    if (!member || !Array.isArray(gamestatus)) return;
-    if (gamestatus.length !== 23) return;
-    const normalized = [member.gameName];
-    for (let i = 1; i <= 20; i++) {
-      const marble = gamestatus[i];
-      if (!marble || !Number.isFinite(marble.x) || !Number.isFinite(marble.y)) return;
-      normalized.push({ x: marble.x, y: marble.y });
+    if (!member || !gamestatus || typeof gamestatus !== "object") return;
+    if (!checkLimit(socket, "marbleState", 30, 1000)) return;
+    if (!Array.isArray(gamestatus.changes) || gamestatus.changes.length > 20) return;
+
+    const validNames = new Set([
+      "top1", "top2", "top3", "top4", "top5",
+      "right1", "right2", "right3", "right4", "right5",
+      "bottom1", "bottom2", "bottom3", "bottom4", "bottom5",
+      "left1", "left2", "left3", "left4", "left5"
+    ]);
+    const changes = [];
+    for (const change of gamestatus.changes) {
+      if (!change || !validNames.has(change.name)) return;
+      if (!Number.isFinite(change.x) || !Number.isFinite(change.y)) return;
+      if (Math.abs(change.x) > 2000 || Math.abs(change.y) > 2000) return;
+      changes.push({ name: change.name, x: change.x, y: change.y });
     }
-    normalized.push(
-      typeof gamestatus[21] === "string" ? gamestatus[21].slice(0, 120) : "",
-      Boolean(gamestatus[22])
-    );
-    store.updateMarbleState(normalized);
+
+    const turn = typeof gamestatus.turn === "string" ? gamestatus.turn.slice(0, 120) : "";
+    const reset = Boolean(gamestatus.reset);
+    store.updateMarbleDelta(member.gameName, changes, turn, reset);
+
+    const nextSequence = (marbleSnapshotSequences.get(member.gameName) || 0) + 1;
+    marbleSnapshotSequences.set(member.gameName, nextSequence);
+    socket.to(member.gameName).emit("marbleStateDelta", {
+      sequence: nextSequence,
+      changes,
+      turn,
+      reset
+    });
   });
 
   socket.on("disconnect", function () {
