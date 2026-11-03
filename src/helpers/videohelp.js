@@ -16,13 +16,28 @@ export default {
         console.log('camera available',this.userMediaAvailable())
         if ( this.userMediaAvailable() ) {
             return navigator.mediaDevices.getUserMedia( {
-                video: {width: {ideal: 1280}, height: {ideal: 720}, frameRate: {ideal: 30, min: 15} },
+                video: {
+                    width: { exact: 640 },
+                    height: { exact: 480 },
+                    frameRate: { exact: 30 }
+                },
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    disableWebAudio: true
+                    autoGainControl: true
                 }
-            } );
+            } ).catch(() => navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    frameRate: { ideal: 30, max: 30 }
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            }));
         }
 
         else {

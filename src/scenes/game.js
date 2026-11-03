@@ -236,10 +236,7 @@ socket.on( 'sdp', async ( data ) => {
 
           //save my stream
           myStream = stream;
-
-          stream.getTracks().forEach( ( track ) => {
-              pc[data.sender].addTrack( track, stream );
-          } );
+          addMediaTracks(pc[data.sender], stream);
 
           let answer = await pc[data.sender].createAnswer();
 
@@ -1022,6 +1019,100 @@ socket.on('updateName', (data, playernum) => {
 //---------------------------------------------
  // -- webRTC function
 
+ function preferCodec(transceiver, kind, preferredCodec) {
+   if (!transceiver || typeof transceiver.setCodecPreferences !== "function") return;
+   const capabilities = RTCRtpSender.getCapabilities?.(kind);
+   if (!capabilities?.codecs) return;
+
+   const preferredMime = `${kind}/${preferredCodec}`.toLowerCase();
+   const preferred = capabilities.codecs.filter((codec) =>
+     codec.mimeType.toLowerCase() === preferredMime
+   );
+   if (preferred.length === 0) return;
+   const remaining = capabilities.codecs.filter((codec) =>
+     codec.mimeType.toLowerCase() !== preferredMime
+   );
+   transceiver.setCodecPreferences([...preferred, ...remaining]);
+ }
+
+ async function configureVideoSender(sender) {
+   if (!sender || typeof sender.getParameters !== "function") return;
+   const parameters = sender.getParameters();
+   parameters.encodings ||= [{}];
+
+   if (parameters.encodings.length === 1) {
+     parameters.encodings[0].maxBitrate = 750_000;
+     parameters.encodings[0].maxFramerate = 30;
+     parameters.encodings[0].scaleResolutionDownBy = 1;
+   } else {
+     const simulcastLimits = [525_000, 150_000, 75_000];
+     parameters.encodings.forEach((encoding, index) => {
+       encoding.maxBitrate = simulcastLimits[index] || 75_000;
+       encoding.maxFramerate = 30;
+       encoding.scaleResolutionDownBy = [1, 2, 4][index] || 4;
+     });
+   }
+   parameters.degradationPreference = "maintain-framerate";
+   if (typeof sender.setParameters === "function") await sender.setParameters(parameters);
+ }
+
+ async function configureAudioSender(sender) {
+   if (!sender || typeof sender.getParameters !== "function") return;
+   const parameters = sender.getParameters();
+   parameters.encodings ||= [{}];
+   parameters.encodings.forEach((encoding) => { encoding.maxBitrate = 64_000; });
+   if (typeof sender.setParameters === "function") await sender.setParameters(parameters);
+ }
+
+ function addMediaTracks(peer, stream) {
+   for (const track of stream.getAudioTracks()) {
+     let transceiver = peer.getTransceivers().find((item) =>
+       !item.stopped &&
+       item.receiver?.track?.kind === "audio" &&
+       !item.sender.track
+     );
+     const sender = transceiver
+       ? (transceiver.sender.replaceTrack(track), transceiver.sender)
+       : peer.addTrack(track, stream);
+     transceiver ||= peer.getTransceivers().find((item) => item.sender === sender);
+     preferCodec(transceiver, "audio", "opus");
+     configureAudioSender(sender).catch(console.error);
+   }
+
+   for (const track of stream.getVideoTracks()) {
+     let transceiver = peer.getTransceivers().find((item) =>
+       !item.stopped &&
+       item.receiver?.track?.kind === "video" &&
+       !item.sender.track
+     );
+
+     if (transceiver) {
+       transceiver.sender.replaceTrack(track);
+     } else if (typeof peer.addTransceiver === "function") {
+       try {
+         transceiver = peer.addTransceiver(track, {
+           direction: "sendrecv",
+           streams: [stream],
+           sendEncodings: [
+             { rid: "high", maxBitrate: 525_000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+             { rid: "medium", maxBitrate: 150_000, maxFramerate: 30, scaleResolutionDownBy: 2 },
+             { rid: "low", maxBitrate: 75_000, maxFramerate: 30, scaleResolutionDownBy: 4 }
+           ]
+         });
+       } catch (error) {
+         transceiver = peer.addTrack(track, stream)
+           ? peer.getTransceivers().find((item) => item.sender.track === track)
+           : undefined;
+         console.error("Video simulcast unavailable; using single encoding", error);
+       }
+     } else {
+       transceiver = peer.getTransceivers().find((item) => item.sender.track === track);
+     }
+     preferCodec(transceiver, "video", "VP9");
+     if (transceiver?.sender) configureVideoSender(transceiver.sender).catch(console.error);
+   }
+ }
+
  function getAndSetUserStream() {
   h.getUserFullMedia().then( ( stream ) => {
       //save my stream
@@ -1070,15 +1161,11 @@ socket.on('updateName', (data, playernum) => {
   pc[partnerName] = new RTCPeerConnection( ice );
   console.log("*****: ",pc[partnerName])
   if ( screen && screen.getTracks().length ) {
-      screen.getTracks().forEach( ( track ) => {
-          pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
-      } );
+      addMediaTracks(pc[partnerName], screen);
   }
 
   else if ( myStream ) {
-      myStream.getTracks().forEach( ( track ) => {
-          pc[partnerName].addTrack( track, myStream );//should trigger negotiationneeded event
-      } );
+      addMediaTracks(pc[partnerName], myStream);
   }
 
   else {
@@ -1086,9 +1173,7 @@ socket.on('updateName', (data, playernum) => {
           //save my stream
           myStream = stream;
 
-          stream.getTracks().forEach( ( track ) => {
-              pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
-          } );
+          addMediaTracks(pc[partnerName], stream);
 
           h.setLocalStream( stream );
       } ).catch( ( e ) => {
