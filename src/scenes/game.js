@@ -696,19 +696,37 @@ socket.on('updateName', (data, playernum) => {
         gameObject.setDepth(playershand.indexOf(gameObject))
 
       } else if (dropped && !keys.includes(gameObject.name) ){  // what happens when card is dropped in dropZone
-          gameObject.x = this.dropZone.x
-          gameObject.y = this.dropZone.y
-          gameObject.setDepth(100)
-          gameObject.clearTint()
-          gameObject.disableInteractive({ useHandCursor: false, draggable: false})
-          gameObject.input.enabled = false
-          newcardplayed = true
-          socket.emit('cardPlayedclient', gameObject.frame.name, sessionStorage.getItem('playerNum'), playershand.indexOf(gameObject), socket.id)
-          gameObject.destroy()
+          const cardFrame = gameObject.frame.name
+          const cardIndex = playershand.indexOf(gameObject)
+          const dragStartX = gameObject.input.dragStartX
+          const dragStartY = gameObject.input.dragStartY
+          socket.emit(
+            'cardPlayedclient',
+            cardFrame,
+            sessionStorage.getItem('playerNum'),
+            cardIndex,
+            (result) => {
+              if (!result?.ok) {
+                gameObject.setPosition(dragStartX, dragStartY)
+                gameObject.setDepth(cardIndex)
+                gameObject.setInteractive({ useHandCursor: true, draggable: true })
+                return
+              }
+
+              gameObject.x = this.dropZone.x
+              gameObject.y = this.dropZone.y
+              gameObject.setDepth(100)
+              gameObject.clearTint()
+              gameObject.disableInteractive({ useHandCursor: false, draggable: false})
+              gameObject.input.enabled = false
+              newcardplayed = true
+              gameObject.destroy()
+            }
+          )
 
       } else if (!dropped && keys.includes(gameObject.name)){  // what happens when marble is moved
-        if (newcardplayed){
-          playersturn(gameObject, ghf, yhf, rhf, bhf)
+        const completedCardMove = newcardplayed;
+        if (completedCardMove){
           newcardplayed = false
         }
          
@@ -730,26 +748,13 @@ socket.on('updateName', (data, playernum) => {
           for (const change of changes) {
             marbleSnapshotBaseline.set(change.name, { x: change.x, y: change.y });
           }
-          socket.emit('marbleState', {
-            sequence: marbleSnapshotSequence,
-            changes,
-            turn: this.colorsturn.text,
-            reset: newGameButtonStatus
-          })
+        if (completedCardMove) socket.emit('marbleState', {
+          sequence: marbleSnapshotSequence,
+          changes,
+          actionId: `${socket.id}:${marbleSnapshotSequence}`
+        })
      }
      // -- updates the server on the marblestate of this player
-      
-
-    // ************** determine if there is a winner **************************
-      if (ghf && rhf) {
-        let winner = 'gr'
-        socket.emit('winner', winner)
-      }
-      if (yhf && bhf) {
-          let winner = 'yb'
-          socket.emit('winner', winner)
-      }
-
     });
 
     this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
@@ -999,7 +1004,6 @@ socket.on('updateName', (data, playernum) => {
                            answer = `${sessionStorage.getItem('playerName1')}'s turn`
                        }
        this.colorsturn.text = answer
-       socket.emit('colourturnclient', answer)
    }
 
     //** Checks to see if home area is full of not */

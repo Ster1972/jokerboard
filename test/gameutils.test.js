@@ -132,3 +132,64 @@ test("RoomGameStore merges marble deltas into reconnect snapshots", () => {
   assert.equal(snapshot[22], true);
   assert.equal(store.getMarbleStates("room1")[0][0], "room1");
 });
+
+test("RoomGameStore enforces turn order and monotonic replay protection", () => {
+  const store = new RoomGameStore();
+  store.addUser({ gameName: "room1", player: "Ada", id: "socket-1", playernum: "1" });
+  store.addUser({ gameName: "room1", player: "Lin", id: "socket-2", playernum: "2" });
+  store.setCardState({
+    roomName: "room1",
+    hand1: ["a", "b"],
+    hand2: ["c", "d"],
+    hand3: ["e"],
+    hand4: ["f"],
+    gameDeck: ["g"],
+    cardsplayed: [],
+    activePlayer: 1,
+    authoritative: true
+  });
+
+  assert.equal(store.playCard("room1", "c", 2, 0), null);
+  assert.equal(store.playCard("room1", "a", 1, 0), "g");
+  assert.equal(store.getCardState("room1").pendingCardPlayer, 1);
+
+  const first = store.completeMarbleAction("room1", 1, "action-1", [
+    { name: "bottom1", x: 450, y: 720 }
+  ]);
+  assert.ok(first);
+  assert.equal(first.activePlayer, 2);
+  assert.equal(store.completeMarbleAction("room1", 1, "action-2", []), null);
+  assert.equal(store.completeMarbleAction("room1", 2, "action-1", []), null);
+});
+
+test("all four players can play cards only during their server-assigned turn", () => {
+  const store = new RoomGameStore();
+  for (const playerNum of [1, 2, 3, 4]) {
+    store.addUser({
+      gameName: "room1",
+      player: `Player ${playerNum}`,
+      id: `socket-${playerNum}`,
+      playernum: String(playerNum)
+    });
+  }
+  store.setCardState({
+    roomName: "room1",
+    hand1: ["a1", "a2"],
+    hand2: ["b1", "b2"],
+    hand3: ["c1", "c2"],
+    hand4: ["d1", "d2"],
+    gameDeck: ["a3", "b3", "c3", "d3"],
+    cardsplayed: [],
+    activePlayer: 1,
+    authoritative: true
+  });
+
+  for (const [playerNum, card] of [
+    [1, "a1"], [2, "b1"], [3, "c1"], [4, "d1"]
+  ]) {
+    assert.equal(store.getCardState("room1").activePlayer, playerNum);
+    assert.equal(store.playCard("room1", card, playerNum, 0), `${card[0]}3`);
+    assert.equal(store.completeMarbleAction("room1", playerNum, `action-${playerNum}`, []).activePlayer,
+      playerNum === 4 ? 1 : playerNum + 1);
+  }
+});
