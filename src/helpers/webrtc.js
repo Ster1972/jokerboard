@@ -61,17 +61,3 @@ export function addLocalTracks(peer, stream) {
   }
   return true;
 }
-
-export function ensureMediaTransceivers(peer) {
-  if (!peer?.getTransceivers || typeof peer.addTransceiver !== "function") return;
-
-  const transceivers = peer.getTransceivers();
-  for (const kind of ["audio", "video"]) {
-    const hasKind = transceivers.some((item) =>
-      item.kind === kind ||
-      item.receiver?.track?.kind === kind ||
-      item.sender?.track?.kind === kind
-    );
-    if (!hasKind) peer.addTransceiver(kind, { direction: "sendrecv" });
-  }
-}

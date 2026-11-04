@@ -10,7 +10,6 @@ import {
   BoundedIceCandidateQueue,
   SerializedOperations,
   addLocalTracks,
-  ensureMediaTransceivers,
   isPeerCurrent
 } from "../helpers/webrtc.js"
 
@@ -1181,14 +1180,12 @@ socket.on('updateName', (data, playernum) => {
      peer.__offerPending = false;
      peer.__generation = generation;
 
-     ensureMediaTransceivers(peer);
-     if (myStream) {
-      addLocalTracks(peer, myStream);
-     } else {
-      ensureUserStream().then((stream) => {
-        if (!isPeerCurrent(pc, partnerName, peer)) return;
-        addLocalTracks(peer, stream);
-      }).catch((error) => console.error("stream error:", error));
+     try {
+       const stream = await ensureUserStream();
+       if (!isPeerCurrent(pc, partnerName, peer)) return;
+       addLocalTracks(peer, stream);
+     } catch (error) {
+       console.error("stream error:", error);
      }
 
      const sendOffer = async () => {

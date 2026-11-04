@@ -8,27 +8,8 @@ import {
   BoundedIceCandidateQueue,
   SerializedOperations,
   addLocalTracks,
-  ensureMediaTransceivers,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
-
-test("ensureMediaTransceivers creates cross-browser audio and video transceivers", () => {
-  const transceivers = [];
-  const peer = {
-    getTransceivers: () => transceivers,
-    addTransceiver: (kind, options) => {
-      transceivers.push({ kind, options });
-    }
-  };
-
-  ensureMediaTransceivers(peer);
-  ensureMediaTransceivers(peer);
-
-  assert.deepEqual(transceivers, [
-    { kind: "audio", options: { direction: "sendrecv" } },
-    { kind: "video", options: { direction: "sendrecv" } }
-  ]);
-});
 
 test("addLocalTracks reuses senders and replaces tracks by media kind", async () => {
   const replacementCalls = [];
