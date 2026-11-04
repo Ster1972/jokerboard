@@ -67,3 +67,11 @@ export function shouldCreateOffer(localId, remoteId) {
       localId.length === 0 || remoteId.length === 0) return false;
   return localId.localeCompare(remoteId) < 0;
 }
+
+export function canCreateOffer(peer) {
+  return Boolean(
+    peer?.__shouldOffer &&
+    peer.signalingState === "stable" &&
+    !peer.__offerPending
+  );
+}

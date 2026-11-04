@@ -9,6 +9,7 @@ import {
   SerializedOperations,
   addLocalTracks,
   shouldCreateOffer,
+  canCreateOffer,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
 
@@ -16,6 +17,24 @@ test("deterministic peer ordering creates exactly one offer per pair", () => {
   assert.equal(shouldCreateOffer("socket-a", "socket-b"), true);
   assert.equal(shouldCreateOffer("socket-b", "socket-a"), false);
   assert.equal(shouldCreateOffer("", "socket-b"), false);
+});
+
+test("only the designated offerer can start SDP offer creation", () => {
+  const answerer = {
+    __shouldOffer: false,
+    signalingState: "stable",
+    __offerPending: false
+  };
+  const offerer = {
+    __shouldOffer: true,
+    signalingState: "stable",
+    __offerPending: false
+  };
+
+  assert.equal(canCreateOffer(answerer), false);
+  assert.equal(canCreateOffer(offerer), true);
+  offerer.__offerPending = true;
+  assert.equal(canCreateOffer(offerer), false);
 });
 
 test("addLocalTracks reuses senders and replaces tracks by media kind", async () => {

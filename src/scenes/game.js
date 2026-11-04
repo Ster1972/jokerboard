@@ -11,6 +11,7 @@ import {
   SerializedOperations,
   addLocalTracks,
   shouldCreateOffer,
+  canCreateOffer,
   isPeerCurrent
 } from "../helpers/webrtc.js"
 
@@ -1208,8 +1209,7 @@ socket.on('updateName', (data, playernum) => {
 
      const sendOffer = async () => {
        if (!isPeerCurrent(pc, partnerName, peer) ||
-           peer.signalingState !== "stable" ||
-           peer.__offerPending) return;
+           !canCreateOffer(peer)) return;
        peer.__offerPending = true;
        const operations = signalingQueues.get(partnerName) || new SerializedOperations();
        signalingQueues.set(partnerName, operations);
@@ -1230,7 +1230,7 @@ socket.on('updateName', (data, playernum) => {
      };
 
      peer.onnegotiationneeded = () => {
-       if (peer.signalingState === "stable") sendOffer();
+       if (peer.__shouldOffer === true && peer.signalingState === "stable") sendOffer();
      };
 
      if (createOffer) await sendOffer();
