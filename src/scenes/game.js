@@ -79,6 +79,7 @@ export default class Game extends Phaser.Scene {
     let newcardplayed = false
     let answer = ''
     let myStream = ''
+    let mediaStreamPromise = null
     let pc = {}
     let screen = ''
     let socId = ''
@@ -220,8 +221,11 @@ socket.on( 'ice candidates', async ( data ) => {
 } );
 
 socket.on( 'sdp', async ( data ) => {
+  const peer = pc[data.sender];
+  if (!peer || !data.description || !["offer", "answer"].includes(data.description.type)) return;
+  try {
   if ( data.description.type === 'offer' ) {
-      data.description ? await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) ) : '';
+      await peer.setRemoteDescription( new RTCSessionDescription( data.description ) );
       if (pc[data.sender].pendingCandidates) {
         for (const candidate of pc[data.sender].pendingCandidates) {
           await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
@@ -229,105 +233,62 @@ socket.on( 'sdp', async ( data ) => {
         pc[data.sender].pendingCandidates.length = 0;
       }
 
-      h.getUserFullMedia().then( async ( stream ) => {
-          if ( !document.getElementById( 'local' ).srcObject ) {
-              h.setLocalStream( stream );
+      if (!myStream) {
+          try {
+              await ensureUserStream();
+          } catch (error) {
+              console.error("stream error:", error);
+              return;
           }
+      }
 
-          //save my stream
-          myStream = stream;
+      const existingTracks = new Set(peer.getSenders().map((sender) => sender.track?.kind));
+      myStream.getTracks().forEach((track) => {
+          if (!existingTracks.has(track.kind)) peer.addTrack(track, myStream);
+      });
 
-          stream.getTracks().forEach( ( track ) => {
-              pc[data.sender].addTrack( track, stream );
-          } );
-
-          let answer = await pc[data.sender].createAnswer();
-
-          await pc[data.sender].setLocalDescription( answer );
-
-          socket.emit( 'sdp', { description: pc[data.sender].localDescription, to: data.sender, sender: socket.id } );
-      } ).catch( ( e ) => {
-          console.error( e );
-      } );
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      socket.emit('sdp', { description: peer.localDescription, to: data.sender, sender: socket.id });
   }
 
   else if ( data.description.type === 'answer' ) {
-      await pc[data.sender].setRemoteDescription( new RTCSessionDescription( data.description ) );
+      await peer.setRemoteDescription( new RTCSessionDescription( data.description ) );
       if (pc[data.sender].pendingCandidates) {
         for (const candidate of pc[data.sender].pendingCandidates) {
           await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
         }
         pc[data.sender].pendingCandidates.length = 0;
       }
+  }
+  } catch (error) {
+      console.error("SDP negotiation rejected:", error);
   }
 } );
 
 
 //When the video mute icon is clicked
 
-document.getElementById('toggle-video').addEventListener('click', (e) => {e.preventDefault();
-
+document.getElementById('toggle-video').addEventListener('click', (e) => {
+  e.preventDefault();
   if (!myStream) return;
-  let iconVideo = document.getElementById('buttonVideo')
   const videoTrack = myStream.getVideoTracks()[0];
   if (!videoTrack) return;
-  if (videoTrack.enabled){
-    if (e.target.classList.contains('btn-secondary')){
-    iconVideo.className = 'bi bi-camera-video-off-fill'
-    videoTrack.enabled = false;
-    }
-    else if (e.target.classList.contains('bi-camera-video-fill') || e.target.classList.contains('btn-secondary')){
-      e.target.classList.remove('bi-camera-video-fill');
-      e.target.classList.add('bi-camera-video-off-fill');
-      videoTrack.enabled = false;
-      }
-    }
-  else {
-    if (e.target.classList.contains('btn-secondary')){
-        iconVideo.className = 'bi bi-camera-video-fill'
-        videoTrack.enabled = true;
-    }
-    else if(e.target.classList.contains('bi-camera-video-off-fill') || e.target.classList.contains('btn-secondary')){
-        e.target.classList.remove('bi-camera-video-off-fill');
-        e.target.classList.add('bi-camera-video-fill');
-        videoTrack.enabled = true;
-    }
-  }
-broadcastNewTracks(myStream, 'video')
-
-})
+  videoTrack.enabled = !videoTrack.enabled;
+  document.getElementById('buttonVideo').className =
+    videoTrack.enabled ? 'bi bi-camera-video-fill' : 'bi bi-camera-video-off-fill';
+});
 
 
 //When the audio mute icon is clicked
 document.getElementById('toggle-mute').addEventListener('click', (e) => {
-e.preventDefault();
-if (!myStream) return;
-let iconAudio = document.getElementById('buttonAudio')
-const audioTrack = myStream.getAudioTracks()[0];
-if (!audioTrack) return;
-  if (audioTrack.enabled){
-    if (e.target.classList.contains('btn-secondary')){
-      iconAudio.className = 'bi bi-mic-mute-fill'
-      audioTrack.enabled = false;
-    }
-    else if (e.target.classList.contains('bi-mic-fill')){
-      e.target.classList.remove('bi-mic-fill');
-      e.target.classList.add('bi-mic-mute-fill');
-      audioTrack.enabled = false;
-      }
-  }
-  else {
-    if (e.target.classList.contains('btn-secondary')){
-        iconAudio.className = 'bi bi-mic-fill'
-        audioTrack.enabled = true;
-    }
-    else if(e.target.classList.contains('bi-mic-mute-fill')){
-        e.target.classList.remove('bi-mic-mute-fill');
-        e.target.classList.add('bi-mic-fill');
-        audioTrack.enabled = true;
-    }
-  }
-broadcastNewTracks(myStream, 'audio')
+  e.preventDefault();
+  if (!myStream) return;
+  const audioTrack = myStream.getAudioTracks()[0];
+  if (!audioTrack) return;
+  audioTrack.enabled = !audioTrack.enabled;
+  document.getElementById('buttonAudio').className =
+    audioTrack.enabled ? 'bi bi-mic-fill' : 'bi bi-mic-mute-fill';
 });
 
 socket.on('user-disconnected', (userId, playernum) => {
@@ -1023,15 +984,25 @@ socket.on('updateName', (data, playernum) => {
  // -- webRTC function
 
  function getAndSetUserStream() {
-  h.getUserFullMedia().then( ( stream ) => {
-      //save my stream
-      myStream = stream;
-
-      h.setLocalStream( stream );
-  } ).catch( ( e ) => {
+  ensureUserStream().catch( ( e ) => {
       console.error( `stream error: ${ e }` );
   } );
 }
+
+ function ensureUserStream() {
+  if (myStream) return Promise.resolve(myStream);
+  if (!mediaStreamPromise) {
+    mediaStreamPromise = h.getUserFullMedia().then((stream) => {
+      myStream = stream;
+      h.setLocalStream(stream);
+      return stream;
+    }).catch((error) => {
+      mediaStreamPromise = null;
+      throw error;
+    });
+  }
+  return mediaStreamPromise;
+ }
 
  function closePeerConnection(partnerName, removeVideo = true) {
    const timer = peerRecoveryTimers.get(partnerName);
@@ -1054,7 +1025,15 @@ socket.on('updateName', (data, playernum) => {
    if (removeVideo) h.closeVideo(`${partnerName}-video`);
  }
 
- async function init( createOffer, partnerName ) {
+  window.addEventListener("pagehide", () => {
+    for (const partnerName of Object.keys(pc)) {
+      closePeerConnection(partnerName, true);
+    }
+    h.stopStream(myStream);
+    myStream = "";
+  });
+
+  async function init( createOffer, partnerName ) {
    console.log("init- create offer",partnerName)
    if (pc[partnerName] && ["connected", "connecting", "new"].includes(pc[partnerName].connectionState)) {
      return;
@@ -1068,6 +1047,7 @@ socket.on('updateName', (data, playernum) => {
     return;
   }
   pc[partnerName] = new RTCPeerConnection( ice );
+   pc[partnerName].__shouldOffer = createOffer;
   console.log("*****: ",pc[partnerName])
   if ( screen && screen.getTracks().length ) {
       screen.getTracks().forEach( ( track ) => {
@@ -1082,15 +1062,14 @@ socket.on('updateName', (data, playernum) => {
   }
 
   else {
-      h.getUserFullMedia().then( ( stream ) => {
-          //save my stream
-          myStream = stream;
-
-          stream.getTracks().forEach( ( track ) => {
-              pc[partnerName].addTrack( track, stream );//should trigger negotiationneeded event
-          } );
-
-          h.setLocalStream( stream );
+      ensureUserStream().then((stream) => {
+          if (!pc[partnerName]) return;
+          const existingTracks = new Set(
+              pc[partnerName].getSenders().map((sender) => sender.track?.kind)
+          );
+          stream.getTracks().forEach((track) => {
+              if (!existingTracks.has(track.kind)) pc[partnerName].addTrack(track, stream);
+          });
       } ).catch( ( e ) => {
           console.error( `stream error: ${ e }` );
       } );
@@ -1101,11 +1080,23 @@ socket.on('updateName', (data, playernum) => {
   //create offer
   if ( createOffer ) {
       pc[partnerName].onnegotiationneeded = async () => {
-          let offer = await pc[partnerName].createOffer();
-
-          await pc[partnerName].setLocalDescription( offer );
-
-          socket.emit( 'sdp', { description: pc[partnerName].localDescription, to: partnerName, sender: socket.id } );
+          if (!pc[partnerName] ||
+              pc[partnerName].signalingState !== "stable" ||
+              pc[partnerName].__offerPending) return;
+          pc[partnerName].__offerPending = true;
+          try {
+              const offer = await pc[partnerName].createOffer();
+              await pc[partnerName].setLocalDescription(offer);
+              socket.emit('sdp', {
+                  description: pc[partnerName].localDescription,
+                  to: partnerName,
+                  sender: socket.id
+              });
+          } catch (error) {
+              console.error("Offer creation rejected:", error);
+          } finally {
+              if (pc[partnerName]) pc[partnerName].__offerPending = false;
+          }
       };
   }
 
@@ -1131,10 +1122,9 @@ socket.on('updateName', (data, playernum) => {
           newVid.id = `${ partnerName }-video`;
           newVid.srcObject = str;
           newVid.autoplay = true;
+          newVid.playsInline = true;
           newVid.className = 'remote-video';
           newVid.disablePictureInPicture = true;
-          videos.append(newVid);
-  
           document.getElementById( 'videos' ).appendChild( newVid );
 
           //h.adjustVideoElemSize();
@@ -1159,9 +1149,16 @@ socket.on('updateName', (data, playernum) => {
               if (peerRecoveryTimers.has(partnerName)) break;
               peerRecoveryTimers.set(partnerName, setTimeout(() => {
                 closePeerConnection(partnerName, true);
-              }, 5000));
+              }, 10000));
               break;
           case 'failed':
+              if (peerRecoveryTimers.has(partnerName)) break;
+              peerRecoveryTimers.set(partnerName, setTimeout(async () => {
+                const shouldOffer = peer.__shouldOffer === true;
+                closePeerConnection(partnerName, true);
+                await init(shouldOffer, partnerName);
+              }, 2000));
+              break;
           case 'closed':
               closePeerConnection(partnerName, true);
               break;
@@ -1179,21 +1176,6 @@ socket.on('updateName', (data, playernum) => {
       }
   };
 }  // end of function
-
-function broadcastNewTracks( stream, type, mirrorMode = true ) {
-  h.setLocalStream( stream, mirrorMode );
-
-  let track = type == 'audio' ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
-  if (!track) return;
-
-  for (const peer of Object.values(pc)) {
-      if (peer && typeof peer === 'object') {
-          h.replaceTrack(track, peer);
-      }
-  }
-}
-
-
 
 //============================================
     

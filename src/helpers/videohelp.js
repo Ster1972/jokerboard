@@ -8,7 +8,7 @@ export default {
 
 
     userMediaAvailable() {
-        return !!( navigator.mediaDevices && navigator.mediaDevices.getUserMedia({ video: true, audio: true}) ); // returns a true or false
+        return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === "function");
     },
 
 
@@ -16,11 +16,16 @@ export default {
         console.log('camera available',this.userMediaAvailable())
         if ( this.userMediaAvailable() ) {
             return navigator.mediaDevices.getUserMedia( {
-                video: {width: {ideal: 1280}, height: {ideal: 720}, frameRate: {ideal: 30, min: 15} },
+                video: {
+                    width: { ideal: 960 },
+                    height: { ideal: 540 },
+                    frameRate: { ideal: 24, max: 30, min: 15 }
+                },
                 audio: {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    disableWebAudio: true
+                    autoGainControl: true,
+                    channelCount: 1
                 }
             } );
         }
@@ -38,6 +43,14 @@ export default {
         );
 
         if (sender) sender.replaceTrack(stream);
+    },
+    
+    
+    stopStream( stream ) {
+        if (!stream?.getTracks) return;
+        for (const track of stream.getTracks()) {
+            track.stop();
+        }
     },
 
 

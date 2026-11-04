@@ -27,6 +27,8 @@ server.listen(PORT, () => {
 const store = new RoomGameStore();
 const socketLimits = new Map();
 const marbleSnapshotSequences = new Map();
+const TURN_CREDENTIAL_LIFETIME_SECONDS = 55 * 60;
+let iceServerCache = null;
 
 function checkLimit(socket, event, limit = 30, windowMs = 1000) {
   const now = Date.now();
@@ -52,6 +54,25 @@ function isValidGameObject(value) {
   return value && typeof value === "object" &&
     typeof value.name === "string" &&
     Number.isFinite(value.x) && Number.isFinite(value.y);
+}
+
+function clearSocketRateLimits(socketId) {
+  for (const key of socketLimits.keys()) {
+    if (key.startsWith(`${socketId}:`)) socketLimits.delete(key);
+  }
+}
+
+function isValidSdpDescription(description) {
+  if (!description || typeof description !== "object") return false;
+  if (!["offer", "answer"].includes(description.type)) return false;
+  return typeof description.sdp === "string" && description.sdp.length <= 64 * 1024;
+}
+
+function isValidIceCandidate(candidate) {
+  if (candidate === null) return true;
+  if (!candidate || typeof candidate !== "object") return false;
+  if (typeof candidate.candidate !== "string" || candidate.candidate.length > 4096) return false;
+  return candidate.sdpMid === undefined || typeof candidate.sdpMid === "string";
 }
 
 io.on("connection", (socket) => {
@@ -119,7 +140,10 @@ io.on("connection", (socket) => {
       } );
 
       socket.on( 'sdp', ( data ) => {
-        if (!checkLimit(socket, "sdp", 20, 1000) || !data || typeof data.to !== "string" || !data.description) return;
+        if (!checkLimit(socket, "sdp", 20, 1000) ||
+            !data ||
+            typeof data.to !== "string" ||
+            !isValidSdpDescription(data.description)) return;
         const recipient = store.getUserById(data.to);
         if (recipient && recipient.gameName === roomName) {
           socket.to(data.to).emit('sdp', { description: data.description, sender: socket.id });
@@ -129,7 +153,8 @@ io.on("connection", (socket) => {
       socket.on( 'ice candidates', ( data ) => {
         if (!checkLimit(socket, "ice", 100, 1000) || !data || typeof data.to !== "string") return;
         const recipient = store.getUserById(data.to);
-        if (recipient && recipient.gameName === roomName && "candidate" in data) {
+        if (recipient && recipient.gameName === roomName && "candidate" in data &&
+            isValidIceCandidate(data.candidate)) {
           socket.to(data.to).emit('ice candidates', { candidate: data.candidate, sender: socket.id });
         }
       } );
@@ -275,6 +300,7 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", function () {
     console.log("User disconnected " + socket.id);
+    clearSocketRateLimits(socket.id);
     const playerinfo = store.disconnectUser(socket.id)
     if (!playerinfo) return;
 
@@ -290,12 +316,14 @@ io.on("connection", (socket) => {
 // ----- FUNCTION Section -----------
 
 function createIceServer() {
-  const iceServers = [
-    { urls: ["stun:us-turn12.xirsys.com"] }
-  ];
+  if (iceServerCache && iceServerCache.expiresAt > Date.now()) {
+    return { iceServers: iceServerCache.iceServers };
+  }
+
+  const iceServers = [{ urls: ["stun:us-turn12.xirsys.com"] }];
 
   if (process.env.TURN_URLS && process.env.TURN_SECRET) {
-    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_LIFETIME_SECONDS;
     const username = `${expiresAt}:${crypto.randomBytes(8).toString("hex")}`;
     const credential = crypto.createHmac("sha1", process.env.TURN_SECRET)
       .update(username)
@@ -307,6 +335,10 @@ function createIceServer() {
     });
   }
 
+  iceServerCache = {
+    expiresAt: Date.now() + TURN_CREDENTIAL_LIFETIME_SECONDS * 1000 - 60_000,
+    iceServers
+  };
   return { iceServers };
 }
 

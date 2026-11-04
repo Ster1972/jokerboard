@@ -34,6 +34,8 @@ node --test
   `top1`-`top5`, `right1`-`right5`, `bottom1`-`bottom5`, and `left1`-`left5`.
 - Room state must remain process-local unless a persistence/shared-state change is part of the task.
 - WebRTC signaling should stay relay-only through Socket.IO; do not put secrets or TURN credentials in browser source.
+- Reuse one local media stream across peer connections and avoid renegotiation for track enable/disable toggles.
+- Keep SDP descriptions bounded to 64 KiB and ICE candidates bounded to 4096 characters.
 
 ## State and networking conventions
 

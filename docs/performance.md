@@ -55,11 +55,15 @@ Optimization:
 
 ### WebRTC media
 
-WebRTC uses 1280x720 ideal video at 30 fps and peer connections for each participant. This is the largest bandwidth and CPU cost: video may remain active for every room. Candidate handling and track negotiation may create duplicate offers or reconnect timers.
+WebRTC uses a 960x540 ideal video profile at 24 fps by default and one peer connection per participant. This is the largest bandwidth and CPU cost; video may remain active for every room. Candidate handling and track negotiation can create signaling retries.
 
 Optimization:
 
-- tune resolution/framerate by device and network
+- adaptive resolution/framerate by device and network
+- reuse one local media stream across peers
+- avoid renegotiation for video/audio mute toggles
+- cache TURN credentials instead of generating them for every peer request
+- bound and serialize SDP/ICE negotiation per peer
 - add bandwidth/audio constraints
 - stop tracks when hidden or disconnected
 - verify offer/reply state before creating duplicate connections

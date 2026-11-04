@@ -59,6 +59,8 @@ Current limitation: the implementation does not enforce the documented turn orde
 ### WebRTC video and audio
 
 - The browser requests local audio and video with echo cancellation and noise suppression.
+- The current default media profile requests 960x540 video at an ideal 24 fps, with a 30 fps maximum.
+- The browser reuses the same local stream for all peer connections; track enable/disable changes do not require renegotiation.
 - One peer connection can be maintained for each other room member.
 - Socket.IO relays offer/answer signaling, ICE candidates, and disconnect cleanup.
 - The game displays local and remote video and supports local camera and microphone toggles.

@@ -47,7 +47,7 @@ These checks protect transport shape but do not validate game rules such as lega
 
 ### WebRTC signaling
 
-SDP, ICE, and peer identity fields are relayed only to recipients that match a room user. SDP and candidate strings are not structurally bounded beyond the signaling rate limit. The TURN secret is used only server-side to generate HMAC-SHA1 time-limited credentials.
+SDP, ICE, and peer identity fields are relayed only to recipients that match a room user. SDP descriptions are limited to 64 KiB, ICE candidates to 4096 characters, and signaling is rate-limited. The TURN secret is used only server-side to generate HMAC-SHA1 time-limited credentials and a cached configuration.
 
 Privacy considerations:
 
