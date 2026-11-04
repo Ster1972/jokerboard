@@ -168,10 +168,6 @@ io.on("connection", (socket) => {
     
     socket.on("objMoveData", (obj) => {
       if (!checkLimit(socket, "objMoveData", 60, 1000) || !isValidGameObject(obj)) return;
-      if (!Number.isFinite(obj.x) || !Number.isFinite(obj.y) || Math.abs(obj.x) > 1490 || Math.abs(obj.y) > 825) return;
-      const member = store.getUserById(socket.id);
-      const cardState = member ? store.getCardState(roomName) : null;
-      if (!member || !cardState || !cardState.authoritative || cardState.activePlayer !== Number(member.playernum)) return;
       socket.to(roomName).emit("moveObject", { name: obj.name, x: obj.x, y: obj.y });
     });
 
@@ -186,7 +182,8 @@ io.on("connection", (socket) => {
     })
 
     socket.on('winner', (data) => {
-      return;
+      if (data !== "gr" && data !== "yb") return;
+      io.in(roomName).emit('winners', data)
     })
 
     socket.on('nameUpdate', (data) =>{
@@ -199,7 +196,8 @@ io.on("connection", (socket) => {
     })
 
     socket.on('colourturnclient', (data) => {
-      return;
+      if (typeof data !== "string" || data.length > 120) return;
+      socket.to(roomName).emit('colourturn', data)
     })
 
 
@@ -214,19 +212,7 @@ io.on("connection", (socket) => {
        } else {
           io.to(roomName).emit('startNewGame')  // clear cards from board
           const {hand1, hand2, hand3, hand4, gameDeck, cardsplayed} = createHands()
-          store.setCardState({roomName, hand1, hand2, hand3, hand4, gameDeck, cardsplayed, activePlayer: 1, authoritative: true})
-          store.updateMarbleState([
-            roomName,
-            ...[
-              { x: 370, y: 100 }, { x: 370, y: 140 }, { x: 370, y: 180 }, { x: 330, y: 140 }, { x: 410, y: 140 },
-              { x: 710, y: 370 }, { x: 670, y: 370 }, { x: 630, y: 370 }, { x: 670, y: 330 }, { x: 670, y: 410 },
-              { x: 450, y: 720 }, { x: 450, y: 680 }, { x: 450, y: 640 }, { x: 490, y: 680 }, { x: 410, y: 680 },
-              { x: 100, y: 450 }, { x: 140, y: 450 }, { x: 180, y: 450 }, { x: 140, y: 490 }, { x: 140, y: 410 }
-            ],
-            store.getTurnText(roomName),
-            false
-          ])
-          io.in(roomName).emit("colourturn", store.getTurnText(roomName));
+          store.setCardState({roomName, hand1, hand2, hand3, hand4, gameDeck, cardsplayed})
 
            const handsByPlayer = {1: hand1, 2: hand2, 3: hand3, 4: hand4};
            for (const guest of guests) {
@@ -238,25 +224,16 @@ io.on("connection", (socket) => {
         
   })
 
-  socket.on('cardPlayedclient', function (gameObj, board, pos, ack) {
+  socket.on('cardPlayedclient', function (gameObj, board, pos) {
     if (typeof gameObj !== "string" || gameObj.length > 8 || !Number.isInteger(pos) || pos < 0 || pos >= 6) return;
     const member = store.getUserById(socket.id);
-    if (!member) return typeof ack === "function" ? ack({ ok: false, reason: "unknown-player" }) : undefined;
-    const playerNum = Number(member.playernum);
-    if (!Number.isInteger(playerNum) || playerNum < 1 || playerNum > 4) {
-      return typeof ack === "function" ? ack({ ok: false, reason: "invalid-player" }) : undefined;
-    }
-    const cardState = store.getCardState(roomName);
-    if (cardState && cardState.authoritative && cardState.activePlayer !== playerNum) {
-      return typeof ack === "function" ? ack({ ok: false, reason: "not-your-turn" }) : undefined;
-    }
-    const newCard = store.playCard(roomName, gameObj, playerNum, pos);
+    if (!member || String(member.playernum) !== String(board)) return;
+    const newCard = store.playCard(roomName, gameObj, board, pos);
     if (newCard !== null) {
-      socket.to(roomName).emit('cardPlayed', gameObj)
+      io.in(roomName).emit('cardPlayed', gameObj)
       io.to(socket.id).emit('newcard', newCard, pos)
-      return typeof ack === "function" ? ack({ ok: true, playerNum, newCard, pos }) : undefined;
-    }
-    if (typeof ack === "function") ack({ ok: false, reason: "invalid-card" });
+  } // end of roomcarddata !== -1
+   // console.log('show game deck -- end', hand1, hand2)
     
 })
 
@@ -278,34 +255,16 @@ io.on("connection", (socket) => {
     for (const change of gamestatus.changes) {
       if (!change || !validNames.has(change.name)) return;
       if (!Number.isFinite(change.x) || !Number.isFinite(change.y)) return;
-      if (change.x < 0 || change.x > 1490 || change.y < 0 || change.y > 825) return;
+      if (Math.abs(change.x) > 2000 || Math.abs(change.y) > 2000) return;
       changes.push({ name: change.name, x: change.x, y: change.y });
     }
 
+    const turn = typeof gamestatus.turn === "string" ? gamestatus.turn.slice(0, 120) : "";
+    const reset = Boolean(gamestatus.reset);
+    store.updateMarbleDelta(member.gameName, changes, turn, reset);
+
     const nextSequence = (marbleSnapshotSequences.get(member.gameName) || 0) + 1;
     marbleSnapshotSequences.set(member.gameName, nextSequence);
-    const actionId = typeof gamestatus.actionId === "string" ? gamestatus.actionId : `${socket.id}:${nextSequence}`;
-    const result = store.completeMarbleAction(
-      member.gameName,
-      Number(member.playernum),
-      actionId,
-      changes
-    );
-    const turn = result ? result.turnText : store.getTurnText(member.gameName);
-    const reset = result ? Boolean(result.winner) : false;
-    if (!result) {
-      return socket.emit("gameActionRejected", { reason: "not-your-turn" });
-    }
-    if (result.snapshot) {
-      result.snapshot[21] = turn;
-      result.snapshot[22] = reset;
-      store.updateMarbleState(result.snapshot);
-    }
-    if (result.winner) {
-      io.in(member.gameName).emit("winners", result.winner);
-    } else {
-      io.in(member.gameName).emit("colourturn", turn);
-    }
     socket.to(member.gameName).emit("marbleStateDelta", {
       sequence: nextSequence,
       changes,

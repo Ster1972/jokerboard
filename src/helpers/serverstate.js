@@ -9,10 +9,6 @@ export class RoomGameStore {
     this.cardStates = [];
   }
 
-  getCardState(roomName) {
-    return this.cardStates.find((state) => state.roomName === roomName);
-  }
-
   addUser(user) {
     this.users.push({ ...user, connected: true });
     return user;
@@ -138,16 +134,12 @@ export class RoomGameStore {
     this.marbleStates.push(state);
   }
 
+  getCardState(roomName) {
+    return this.cardStates.find((state) => state.roomName === roomName);
+  }
+
   setCardState(state) {
     state.lastCardPlayed = "";
-    state.activePlayer = Number.isInteger(Number(state.activePlayer))
-      ? Number(state.activePlayer)
-      : 1;
-    state.turnVersion = Number.isInteger(state.turnVersion) ? state.turnVersion : 0;
-    state.pendingCardPlayer = null;
-    state.winner = null;
-    state.actionSequences = state.actionSequences || {};
-    state.actionIds = state.actionIds || new Set();
     const index = this.cardStates.findIndex((item) => item.roomName === state.roomName);
 
     if (index !== -1) {
@@ -165,9 +157,6 @@ export class RoomGameStore {
   playCard(roomName, gameObj, board, pos) {
     const cardState = this.getCardState(roomName);
     if (!cardState || !Number.isInteger(pos) || pos < 0) return null;
-    const playerNum = Number(board);
-    if (cardState.authoritative && cardState.activePlayer !== playerNum) return null;
-    if (cardState.winner) return null;
 
     const handByPlayer = {
       1: cardState.hand1,
@@ -192,79 +181,6 @@ export class RoomGameStore {
     if (newCard === undefined) return null;
 
     hand.splice(pos, 1, newCard);
-    if (cardState.authoritative) {
-      cardState.pendingCardPlayer = playerNum;
-      cardState.turnVersion++;
-    }
     return newCard;
-  }
-
-  getTurnText(roomName) {
-    const cardState = this.getCardState(roomName);
-    if (!cardState) return "";
-    const activeUser = this.getUsersInRoom(roomName)
-      .find((user) => Number(user.playernum) === cardState.activePlayer);
-    if (!activeUser) return "";
-    return `${activeUser.player}'s turn${cardState.pendingCardPlayer ? "" : "\n"}`;
-  }
-
-  completeMarbleAction(roomName, playerNum, actionId, changes) {
-    const cardState = this.getCardState(roomName);
-    if (!cardState || !cardState.authoritative || cardState.winner) return null;
-    playerNum = Number(playerNum);
-    if (cardState.activePlayer !== playerNum || cardState.pendingCardPlayer !== playerNum) return null;
-
-    if (typeof actionId === "string" && actionId.length <= 100) {
-      if (cardState.actionIds.has(actionId)) return null;
-      cardState.actionIds.add(actionId);
-      if (cardState.actionIds.size > 500) {
-        cardState.actionIds = new Set([...cardState.actionIds].slice(-250));
-      }
-    }
-
-    const snapshot = this.updateMarbleDelta(roomName, changes, "", false);
-    cardState.pendingCardPlayer = null;
-    cardState.activePlayer = (playerNum % 4) + 1;
-    cardState.turnVersion++;
-
-    const winner = this.detectWinner(snapshot);
-    if (winner) {
-      cardState.winner = winner;
-      snapshot[22] = true;
-      this.updateMarbleState(snapshot);
-    } else {
-      snapshot[22] = false;
-      this.updateMarbleState(snapshot);
-    }
-    return {
-      snapshot,
-      activePlayer: cardState.activePlayer,
-      turnText: this.getTurnText(roomName),
-      winner
-    };
-  }
-
-  detectWinner(snapshot) {
-    if (!snapshot) return null;
-    const marbles = snapshot.slice(1, 21);
-    const homeGroups = {
-      top: [[170, 100], [170, 140], [170, 180], [210, 180], [250, 180]],
-      right: [[720, 170], [680, 170], [640, 170], [640, 210], [640, 250]],
-      bottom: [[650, 720], [650, 680], [650, 640], [610, 640], [570, 640]],
-      left: [[100, 650], [140, 650], [180, 650], [180, 610], [180, 570]]
-    };
-    const groups = [
-      ["green", marbles.slice(0, 5), homeGroups.top],
-      ["yellow", marbles.slice(15, 20), homeGroups.left],
-      ["red", marbles.slice(10, 15), homeGroups.bottom],
-      ["blue", marbles.slice(5, 10), homeGroups.right]
-    ];
-    const isFull = (positions, homes) => homes.every(([x, y]) =>
-      positions.some((position) => Math.hypot(position.x - x, position.y - y) <= 30)
-    );
-    const full = new Set(groups.filter(([, positions, homes]) => isFull(positions, homes)).map(([name]) => name));
-    if (full.has("green") && full.has("red")) return "gr";
-    if (full.has("yellow") && full.has("blue")) return "yb";
-    return null;
   }
 }
