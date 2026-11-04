@@ -72,7 +72,13 @@ function isValidIceCandidate(candidate) {
   if (candidate === null) return true;
   if (!candidate || typeof candidate !== "object") return false;
   if (typeof candidate.candidate !== "string" || candidate.candidate.length > 4096) return false;
-  return candidate.sdpMid === undefined || typeof candidate.sdpMid === "string";
+  if (candidate.sdpMid !== undefined &&
+      (typeof candidate.sdpMid !== "string" || candidate.sdpMid.length > 128)) return false;
+  if (candidate.sdpMLineIndex !== undefined &&
+      (!Number.isInteger(candidate.sdpMLineIndex) ||
+       candidate.sdpMLineIndex < 0 ||
+       candidate.sdpMLineIndex > 1024)) return false;
+  return true;
 }
 
 io.on("connection", (socket) => {
@@ -320,7 +326,12 @@ function createIceServer() {
     return { iceServers: iceServerCache.iceServers };
   }
 
-  const iceServers = [{ urls: ["stun:us-turn12.xirsys.com"] }];
+  const iceServers = [{
+    urls: [
+      "stun:stun.l.google.com:19302",
+      "stun:stun1.l.google.com:19302"
+    ]
+  }];
 
   if (process.env.TURN_URLS && process.env.TURN_SECRET) {
     const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_LIFETIME_SECONDS;

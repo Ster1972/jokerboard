@@ -4,6 +4,103 @@ import assert from "node:assert/strict";
 import { createHands, isAlphanumeric, shuffle } from "../src/helpers/gameutils.js";
 import { RoomGameStore } from "../src/helpers/serverstate.js";
 import { getNearestBoardHole } from "../src/helpers/boardholes.js";
+import {
+  BoundedIceCandidateQueue,
+  SerializedOperations,
+  addLocalTracks,
+  ensureMediaTransceivers,
+  isPeerCurrent
+} from "../src/helpers/webrtc.js";
+
+test("ensureMediaTransceivers creates cross-browser audio and video transceivers", () => {
+  const transceivers = [];
+  const peer = {
+    getTransceivers: () => transceivers,
+    addTransceiver: (kind, options) => {
+      transceivers.push({ kind, options });
+    }
+  };
+
+  ensureMediaTransceivers(peer);
+  ensureMediaTransceivers(peer);
+
+  assert.deepEqual(transceivers, [
+    { kind: "audio", options: { direction: "sendrecv" } },
+    { kind: "video", options: { direction: "sendrecv" } }
+  ]);
+});
+
+test("addLocalTracks reuses senders and replaces tracks by media kind", async () => {
+  const replacementCalls = [];
+  const addedTracks = [];
+  const audioTrack = { kind: "audio" };
+  const videoTrack = { kind: "video" };
+  const peer = {
+    getSenders: () => [
+      { track: audioTrack, replaceTrack: (track) => {
+        replacementCalls.push(track);
+        return Promise.resolve();
+      } }
+    ],
+    addTrack: (track) => addedTracks.push(track)
+  };
+  const stream = { getTracks: () => [audioTrack, videoTrack] };
+
+  assert.equal(addLocalTracks(peer, stream), true);
+  await Promise.resolve();
+
+  assert.deepEqual(replacementCalls, []);
+  assert.deepEqual(addedTracks, [videoTrack]);
+});
+
+test("bounded ICE candidate queue keeps only the newest candidates", () => {
+  const queue = new BoundedIceCandidateQueue(3);
+  queue.push({ candidate: "one" });
+  queue.push({ candidate: "two" });
+  queue.push({ candidate: "three" });
+  queue.push({ candidate: "four" });
+
+  assert.deepEqual(queue.drain(), [
+    { candidate: "two" },
+    { candidate: "three" },
+    { candidate: "four" }
+  ]);
+  assert.deepEqual(queue.drain(), []);
+});
+
+test("serialized operations do not overlap and continue after errors", async () => {
+  const operations = new SerializedOperations();
+  const order = [];
+  await Promise.all([
+    operations.run(async () => {
+      order.push("first-start");
+      await Promise.resolve();
+      order.push("first-end");
+    }),
+    operations.run(async () => {
+      order.push("second");
+    })
+  ]);
+  await assert.rejects(
+    operations.run(async () => {
+      throw new Error("expected");
+    }),
+    /expected/
+  );
+  await operations.run(async () => order.push("after-error"));
+  assert.deepEqual(order, ["first-start", "first-end", "second", "after-error"]);
+});
+
+test("peer identity guard rejects callbacks from replaced peers", () => {
+  const oldPeer = {};
+  const newPeer = {};
+  const registry = { "peer-a": oldPeer };
+
+  assert.equal(isPeerCurrent(registry, "peer-a", oldPeer), true);
+  assert.equal(isPeerCurrent(registry, "peer-a", newPeer), false);
+  registry["peer-a"] = newPeer;
+  assert.equal(isPeerCurrent(registry, "peer-a", newPeer), true);
+});
 
 test("getNearestBoardHole returns the exact center of the nearest hole", () => {
   const gameBoard = {

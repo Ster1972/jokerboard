@@ -36,6 +36,10 @@ node --test
 - WebRTC signaling should stay relay-only through Socket.IO; do not put secrets or TURN credentials in browser source.
 - Reuse one local media stream across peer connections and avoid renegotiation for track enable/disable toggles.
 - Keep SDP descriptions bounded to 64 KiB and ICE candidates bounded to 4096 characters.
+- Deduplicate peer initialization by socket ID, serialize SDP/ICE operations per peer, and use stale-peer identity guards.
+- Bound pending ICE candidates, defer them until remote description exists, and clear peer queues during closure.
+- Use ICE restart for transient disconnected peers before recreating the peer connection.
+- Preserve remote stream/track DOM cleanup and local track ended handling across reconnect, page hide, and scene shutdown.
 
 ## State and networking conventions
 

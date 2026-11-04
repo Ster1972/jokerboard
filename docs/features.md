@@ -66,6 +66,12 @@ Current limitation: the implementation does not enforce the documented turn orde
 - The game displays local and remote video and supports local camera and microphone toggles.
 - A TURN configuration is used when TURN environment configuration is present; otherwise the server advertises only its STUN URL.
 - Disconnected or failed peers are closed and video DOM elements are removed.
+- Peer initialization is single-flight per remote socket, SDP operations are serialized per peer, and ICE candidates are bounded and deferred until remote description is available.
+- Offer collisions are resolved with polite-peer rollback behavior.
+- Disconnected peers receive an ICE restart before a timed recreation fallback; failed peers are recreated once after a short recovery delay.
+- Remote tracks are collected into one `MediaStream` per peer even when a browser does not provide an associated stream.
+- Local track termination updates the camera or microphone button state, and `pageshow` reacquires local media after a persisted page navigation.
+- WebRTC runtime metrics are exposed for diagnostics at `window.__jokerWebRtcMetrics`.
 
 ## Critical functionality
 

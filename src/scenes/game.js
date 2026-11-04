@@ -6,6 +6,13 @@ import Zone from "../helpers/zone.js"
 import Card from "../helpers/cards.js"
 import h from "../helpers/videohelp.js"
 import CustomModal from "../helpers/changename.js"
+import {
+  BoundedIceCandidateQueue,
+  SerializedOperations,
+  addLocalTracks,
+  ensureMediaTransceivers,
+  isPeerCurrent
+} from "../helpers/webrtc.js"
 
 const MARBLE_LAYOUT = {
   top: {
@@ -81,13 +88,18 @@ export default class Game extends Phaser.Scene {
     let myStream = ''
     let mediaStreamPromise = null
     let pc = {}
-    let screen = ''
     let socId = ''
     let sessionToken = sessionStorage.getItem("sessionToken") || ""
     const movementIntervalMs = 1000 / 30
     let lastMovementSentAt = 0
     let lastSentMarblePosition = null
     let peerRecoveryTimers = new Map()
+    let peerInitPromises = new Map()
+    let signalingQueues = new Map()
+    let candidateQueues = new Map()
+    let remoteStreams = new Map()
+    let peerGenerations = new Map()
+    let webrtcStatsInterval = null
 
     // add dom to scene - used for WEBRTC stuff 
     this.add.dom(1375, 250).createFromCache('videodom');
@@ -207,60 +219,79 @@ export default class Game extends Phaser.Scene {
 
 socket.on( 'ice candidates', async ( data ) => {
  const peer = pc[data.sender];
- if (!peer || !data.candidate) return;
- if (!peer.remoteDescription) {
-   peer.pendingCandidates ||= [];
-   peer.pendingCandidates.push(data.candidate);
+ if (!peer) {
+   if (!candidateQueues.has(data.sender)) candidateQueues.set(data.sender, new BoundedIceCandidateQueue());
+   candidateQueues.get(data.sender).push(data.candidate);
+   await init(false, data.sender);
    return;
  }
- try {
-   await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
- } catch (error) {
-   console.error("ICE candidate rejected:", error);
+ if (!data.candidate) return;
+ if (!peer.remoteDescription) {
+   if (!candidateQueues.has(data.sender)) candidateQueues.set(data.sender, new BoundedIceCandidateQueue());
+   candidateQueues.get(data.sender).push(data.candidate);
+   return;
  }
+ const operations = signalingQueues.get(data.sender) || new SerializedOperations();
+ signalingQueues.set(data.sender, operations);
+ await operations.run(async () => {
+   if (!isPeerCurrent(pc, data.sender, peer)) return;
+   try {
+     await peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+   } catch (error) {
+     console.error("ICE candidate rejected:", error);
+   }
+ });
 } );
 
 socket.on( 'sdp', async ( data ) => {
-  const peer = pc[data.sender];
-  if (!peer || !data.description || !["offer", "answer"].includes(data.description.type)) return;
+  if (!data.description || !["offer", "answer"].includes(data.description.type)) return;
+  let peer = pc[data.sender];
+  if (!peer) {
+    await init(data.description.type === "answer", data.sender);
+    peer = pc[data.sender];
+  }
+  if (!peer) return;
   try {
-  if ( data.description.type === 'offer' ) {
-      await peer.setRemoteDescription( new RTCSessionDescription( data.description ) );
-      if (pc[data.sender].pendingCandidates) {
-        for (const candidate of pc[data.sender].pendingCandidates) {
-          await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
-        }
-        pc[data.sender].pendingCandidates.length = 0;
-      }
+    const operations = signalingQueues.get(data.sender) || new SerializedOperations();
+    signalingQueues.set(data.sender, operations);
+    await operations.run(async () => {
+      if (!isPeerCurrent(pc, data.sender, peer)) return;
 
-      if (!myStream) {
+      if (data.description.type === "offer") {
+        const collision = peer.signalingState !== "stable";
+        const ignoreOffer = !peer.__polite && collision;
+        if (ignoreOffer) return;
+
+        if (collision && peer.__polite) {
+          await peer.setLocalDescription({ type: "rollback" });
+        }
+        await peer.setRemoteDescription(new RTCSessionDescription(data.description));
+
+        if (!myStream) {
           try {
-              await ensureUserStream();
+            await ensureUserStream();
           } catch (error) {
-              console.error("stream error:", error);
-              return;
+            console.error("stream error:", error);
+            return;
           }
-      }
-
-      const existingTracks = new Set(peer.getSenders().map((sender) => sender.track?.kind));
-      myStream.getTracks().forEach((track) => {
-          if (!existingTracks.has(track.kind)) peer.addTrack(track, myStream);
-      });
-
-      const answer = await peer.createAnswer();
-      await peer.setLocalDescription(answer);
-      socket.emit('sdp', { description: peer.localDescription, to: data.sender, sender: socket.id });
-  }
-
-  else if ( data.description.type === 'answer' ) {
-      await peer.setRemoteDescription( new RTCSessionDescription( data.description ) );
-      if (pc[data.sender].pendingCandidates) {
-        for (const candidate of pc[data.sender].pendingCandidates) {
-          await pc[data.sender].addIceCandidate(new RTCIceCandidate(candidate)).catch(console.error);
         }
-        pc[data.sender].pendingCandidates.length = 0;
+
+        addLocalTracks(peer, myStream);
+
+        const answer = await peer.createAnswer();
+        await peer.setLocalDescription(answer);
+        socket.emit("sdp", {
+          description: peer.localDescription,
+          to: data.sender,
+          sender: socket.id
+        });
+      } else {
+        if (peer.signalingState !== "have-local-offer") return;
+        await peer.setRemoteDescription(new RTCSessionDescription(data.description));
       }
-  }
+
+      await flushPendingCandidates(data.sender, peer);
+    });
   } catch (error) {
       console.error("SDP negotiation rejected:", error);
   }
@@ -995,6 +1026,17 @@ socket.on('updateName', (data, playernum) => {
     mediaStreamPromise = h.getUserFullMedia().then((stream) => {
       myStream = stream;
       h.setLocalStream(stream);
+      stream.getTracks().forEach((track) => {
+        track.addEventListener("ended", () => {
+          if (track.kind === "video") {
+            document.getElementById("buttonVideo").className = "bi bi-camera-video-off-fill";
+            h.toggleVideoBtnDisabled(false);
+          }
+          if (track.kind === "audio") {
+            document.getElementById("buttonAudio").className = "bi bi-mic-mute-fill";
+          }
+        }, { once: true });
+      });
       return stream;
     }).catch((error) => {
       mediaStreamPromise = null;
@@ -1022,8 +1064,88 @@ socket.on('updateName', (data, playernum) => {
      delete pc[partnerName];
    }
 
+   peerGenerations.set(partnerName, (peerGenerations.get(partnerName) || 0) + 1);
+   peerInitPromises.delete(partnerName);
+   signalingQueues.delete(partnerName);
+   candidateQueues.delete(partnerName);
+   const remoteStream = remoteStreams.get(partnerName);
+   if (remoteStream?.getTracks) {
+     remoteStream.getTracks().forEach((track) => track.stop());
+   }
+   remoteStreams.delete(partnerName);
    if (removeVideo) h.closeVideo(`${partnerName}-video`);
  }
+
+  function requestIceServerConfig(timeoutMs = 4000) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        resolve({ iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
+      }, timeoutMs);
+      socket.emit("getIceServer_Info", (ice) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(ice || { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
+      });
+    });
+  }
+
+  async function collectWebRtcStats() {
+    const metrics = {
+      collectedAt: Date.now(),
+      connections: {}
+    };
+    for (const [partnerName, peer] of Object.entries(pc)) {
+      const connection = {
+        connectionState: peer.connectionState || "unknown",
+        iceConnectionState: peer.iceConnectionState || "unknown",
+        signalingState: peer.signalingState || "unknown",
+        bytesReceived: 0,
+        bytesSent: 0,
+        packetsLost: 0,
+        currentRoundTripTime: null
+      };
+      if (typeof peer.getStats === "function") {
+        try {
+          const stats = await peer.getStats();
+          stats.forEach((report) => {
+            if (report.type === "inbound-rtp") {
+              connection.bytesReceived += report.bytesReceived || 0;
+              connection.packetsLost += report.packetsLost || 0;
+            } else if (report.type === "outbound-rtp") {
+              connection.bytesSent += report.bytesSent || 0;
+            } else if (report.type === "candidate-pair" && report.state === "succeeded") {
+              connection.currentRoundTripTime = report.currentRoundTripTime ?? null;
+            }
+          });
+        } catch (error) {
+          console.error("WebRTC stats unavailable:", error);
+        }
+      }
+      metrics.connections[partnerName] = connection;
+    }
+    window.__jokerWebRtcMetrics = metrics;
+  }
+
+  function startWebRtcMetrics() {
+    if (webrtcStatsInterval) return;
+    collectWebRtcStats();
+    webrtcStatsInterval = setInterval(collectWebRtcStats, 30000);
+  }
+
+  async function flushPendingCandidates(partnerName, peer) {
+    const queue = candidateQueues.get(partnerName);
+    if (!queue || !peer?.remoteDescription) return;
+    for (const candidate of queue.drain()) {
+      if (!isPeerCurrent(pc, partnerName, peer)) return;
+      await peer.addIceCandidate(new RTCIceCandidate(candidate)).catch((error) => {
+        console.error("ICE candidate rejected:", error);
+      });
+    }
+  }
 
   window.addEventListener("pagehide", () => {
     for (const partnerName of Object.keys(pc)) {
@@ -1031,6 +1153,12 @@ socket.on('updateName', (data, playernum) => {
     }
     h.stopStream(myStream);
     myStream = "";
+    mediaStreamPromise = null;
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    getAndSetUserStream();
   });
 
   async function init( createOffer, partnerName ) {
@@ -1038,67 +1166,67 @@ socket.on('updateName', (data, playernum) => {
    if (pc[partnerName] && ["connected", "connecting", "new"].includes(pc[partnerName].connectionState)) {
      return;
    }
-   closePeerConnection(partnerName, true);
-  const ice = await new Promise((resolve) => {
-    socket.emit('getIceServer_Info', resolve);
-  });
-  if (!ice) {
-    console.error("ICE server configuration unavailable");
-    return;
-  }
-  pc[partnerName] = new RTCPeerConnection( ice );
-   pc[partnerName].__shouldOffer = createOffer;
-  console.log("*****: ",pc[partnerName])
-  if ( screen && screen.getTracks().length ) {
-      screen.getTracks().forEach( ( track ) => {
-          pc[partnerName].addTrack( track, screen );//should trigger negotiationneeded event
-      } );
-  }
+   if (peerInitPromises.has(partnerName)) return peerInitPromises.get(partnerName);
 
-  else if ( myStream ) {
-      myStream.getTracks().forEach( ( track ) => {
-          pc[partnerName].addTrack( track, myStream );//should trigger negotiationneeded event
-      } );
-  }
+   const generation = peerGenerations.get(partnerName) || 0;
+   const initPromise = (async () => {
+     const ice = await requestIceServerConfig();
+     if ((peerGenerations.get(partnerName) || 0) !== generation ||
+         pc[partnerName]) return;
 
-  else {
+     const peer = new RTCPeerConnection(ice);
+     pc[partnerName] = peer;
+     peer.__shouldOffer = createOffer;
+     peer.__polite = !createOffer || socket.id.localeCompare(partnerName) > 0;
+     peer.__offerPending = false;
+     peer.__generation = generation;
+
+     ensureMediaTransceivers(peer);
+     if (myStream) {
+      addLocalTracks(peer, myStream);
+     } else {
       ensureUserStream().then((stream) => {
-          if (!pc[partnerName]) return;
-          const existingTracks = new Set(
-              pc[partnerName].getSenders().map((sender) => sender.track?.kind)
-          );
-          stream.getTracks().forEach((track) => {
-              if (!existingTracks.has(track.kind)) pc[partnerName].addTrack(track, stream);
-          });
-      } ).catch( ( e ) => {
-          console.error( `stream error: ${ e }` );
-      } );
-  }
+        if (!isPeerCurrent(pc, partnerName, peer)) return;
+        addLocalTracks(peer, stream);
+      }).catch((error) => console.error("stream error:", error));
+     }
 
+     const sendOffer = async () => {
+       if (!isPeerCurrent(pc, partnerName, peer) ||
+           peer.signalingState !== "stable" ||
+           peer.__offerPending) return;
+       peer.__offerPending = true;
+       const operations = signalingQueues.get(partnerName) || new SerializedOperations();
+       signalingQueues.set(partnerName, operations);
+       await operations.run(async () => {
+         if (!isPeerCurrent(pc, partnerName, peer) || peer.signalingState !== "stable") return;
+         const offer = await peer.createOffer();
+         await peer.setLocalDescription(offer);
+         if (!isPeerCurrent(pc, partnerName, peer)) return;
+         socket.emit("sdp", {
+           description: peer.localDescription,
+           to: partnerName,
+           sender: socket.id
+         });
+       }).catch((error) => console.error("Offer creation rejected:", error))
+         .finally(() => {
+           if (isPeerCurrent(pc, partnerName, peer)) peer.__offerPending = false;
+         });
+     };
 
+     peer.onnegotiationneeded = () => {
+       if (peer.signalingState === "stable") sendOffer();
+     };
 
-  //create offer
-  if ( createOffer ) {
-      pc[partnerName].onnegotiationneeded = async () => {
-          if (!pc[partnerName] ||
-              pc[partnerName].signalingState !== "stable" ||
-              pc[partnerName].__offerPending) return;
-          pc[partnerName].__offerPending = true;
-          try {
-              const offer = await pc[partnerName].createOffer();
-              await pc[partnerName].setLocalDescription(offer);
-              socket.emit('sdp', {
-                  description: pc[partnerName].localDescription,
-                  to: partnerName,
-                  sender: socket.id
-              });
-          } catch (error) {
-              console.error("Offer creation rejected:", error);
-          } finally {
-              if (pc[partnerName]) pc[partnerName].__offerPending = false;
-          }
-      };
-  }
+     if (createOffer) await sendOffer();
+   })();
+
+   peerInitPromises.set(partnerName, initPromise);
+   try {
+     await initPromise;
+   } finally {
+     if (peerInitPromises.get(partnerName) === initPromise) peerInitPromises.delete(partnerName);
+   }
 
 
 
@@ -1111,24 +1239,36 @@ socket.on('updateName', (data, playernum) => {
 
   //add
   pc[partnerName].ontrack = ( e ) => {
-      let str = e.streams[0];
-      if ( document.getElementById( `${ partnerName }-video` ) ) {
-          document.getElementById( `${ partnerName }-video` ).srcObject = str;
+      const peer = pc[partnerName];
+      if (!isPeerCurrent(pc, partnerName, peer)) return;
+      let remoteStream = remoteStreams.get(partnerName) || e.streams?.[0] || new MediaStream();
+      if (!remoteStreams.has(partnerName)) remoteStreams.set(partnerName, remoteStream);
+      if (e.track && !remoteStream.getTracks().includes(e.track)) {
+        remoteStream.addTrack(e.track);
       }
 
-      else {
-          //video elem
-          let newVid = document.createElement( 'video' );
-          newVid.id = `${ partnerName }-video`;
-          newVid.srcObject = str;
-          newVid.autoplay = true;
-          newVid.playsInline = true;
-          newVid.className = 'remote-video';
-          newVid.disablePictureInPicture = true;
-          document.getElementById( 'videos' ).appendChild( newVid );
-
-          //h.adjustVideoElemSize();
+      let video = document.getElementById(`${partnerName}-video`);
+      if (!video) {
+        video = document.createElement("video");
+        video.id = `${partnerName}-video`;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.className = "remote-video";
+        video.disablePictureInPicture = true;
+        document.getElementById("videos").appendChild(video);
       }
+      video.srcObject = remoteStream;
+      video.play?.().catch((error) => {
+        if (error?.name !== "AbortError") console.warn("Remote video autoplay blocked:", error);
+      });
+      e.track?.addEventListener?.("ended", () => {
+        if (!isPeerCurrent(pc, partnerName, peer)) return;
+        if (!remoteStream.getTracks().includes(e.track)) return;
+        remoteStream.removeTrack(e.track);
+        const remainingVideo = remoteStream.getVideoTracks().length;
+        if (!remainingVideo) h.closeVideo(`${partnerName}-video`);
+        else video.srcObject = remoteStream;
+      }, { once: true });
   };
 
 
@@ -1136,6 +1276,7 @@ socket.on('updateName', (data, playernum) => {
   pc[partnerName].onconnectionstatechange = ( d ) => {
       const peer = pc[partnerName];
       if (!peer) return;
+      if (!isPeerCurrent(pc, partnerName, peer)) return;
 
       switch (peer.connectionState || peer.iceConnectionState) {
           case 'connected':
@@ -1144,16 +1285,28 @@ socket.on('updateName', (data, playernum) => {
                 clearTimeout(existingTimer);
                 peerRecoveryTimers.delete(partnerName);
               }
+              startWebRtcMetrics();
               break;
           case 'disconnected':
               if (peerRecoveryTimers.has(partnerName)) break;
               peerRecoveryTimers.set(partnerName, setTimeout(() => {
-                closePeerConnection(partnerName, true);
-              }, 10000));
+                if (!isPeerCurrent(pc, partnerName, peer)) return;
+                if (typeof peer.restartIce === "function") {
+                  peer.restartIce();
+                }
+                peerRecoveryTimers.set(partnerName, setTimeout(async () => {
+                  if (!isPeerCurrent(pc, partnerName, peer)) return;
+                  if (peer.connectionState === "connected") return;
+                  const shouldOffer = peer.__shouldOffer === true;
+                  closePeerConnection(partnerName, true);
+                  await init(shouldOffer, partnerName);
+                }, 15000));
+              }, 5000));
               break;
           case 'failed':
               if (peerRecoveryTimers.has(partnerName)) break;
               peerRecoveryTimers.set(partnerName, setTimeout(async () => {
+                if (!isPeerCurrent(pc, partnerName, peer)) return;
                 const shouldOffer = peer.__shouldOffer === true;
                 closePeerConnection(partnerName, true);
                 await init(shouldOffer, partnerName);
@@ -1168,10 +1321,14 @@ socket.on('updateName', (data, playernum) => {
 
 
   pc[partnerName].onsignalingstatechange = ( d ) => {
-      switch ( pc[partnerName].signalingState ) {
+      const peer = pc[partnerName];
+      if (!peer || !isPeerCurrent(pc, partnerName, peer)) return;
+      switch ( peer.signalingState ) {
           case 'closed':
               //console.log( "Signalling state is 'closed'" );
-              closePeerConnection(partnerName, true);
+              if (isPeerCurrent(pc, partnerName, pc[partnerName])) {
+                closePeerConnection(partnerName, true);
+              }
               break;
       }
   };
@@ -1191,6 +1348,18 @@ socket.on('updateName', (data, playernum) => {
     for (const timer of peerRecoveryTimers.values()) clearTimeout(timer);
     peerRecoveryTimers.clear();
     pc = {};
+    peerInitPromises.clear();
+    signalingQueues.clear();
+    candidateQueues.clear();
+    remoteStreams.forEach((stream) => {
+      stream?.getTracks?.().forEach((track) => track.stop());
+    });
+    remoteStreams.clear();
+    peerGenerations.clear();
+    if (webrtcStatsInterval) {
+      clearInterval(webrtcStatsInterval);
+      webrtcStatsInterval = null;
+    }
     if (myStream) {
       myStream.getTracks().forEach((track) => track.stop());
     }
