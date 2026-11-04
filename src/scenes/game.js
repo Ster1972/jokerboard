@@ -10,6 +10,7 @@ import {
   BoundedIceCandidateQueue,
   SerializedOperations,
   addLocalTracks,
+  shouldCreateOffer,
   isPeerCurrent
 } from "../helpers/webrtc.js"
 
@@ -178,6 +179,8 @@ export default class Game extends Phaser.Scene {
           playerName4Text.text = result4.player
           sessionStorage.setItem('playerName4', result4.player )
         }
+
+        reconcilePeerConnections(users);
         
         });
     }
@@ -246,7 +249,7 @@ socket.on( 'sdp', async ( data ) => {
   if (!data.description || !["offer", "answer"].includes(data.description.type)) return;
   let peer = pc[data.sender];
   if (!peer) {
-    await init(data.description.type === "answer", data.sender);
+    await init(false, data.sender);
     peer = pc[data.sender];
   }
   if (!peer) return;
@@ -1090,6 +1093,21 @@ socket.on('updateName', (data, playernum) => {
         resolve(ice || { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
       });
     });
+  }
+
+  function reconcilePeerConnections(users) {
+    if (!Array.isArray(users) || !socket.id) return;
+
+    for (const user of users) {
+      if (!user || typeof user.id !== "string" || user.id === socket.id) continue;
+      if (user.connected === false) continue;
+
+      const peer = pc[user.id];
+      if (peer && ["connected", "connecting"].includes(peer.connectionState || peer.iceConnectionState)) continue;
+      if (peer && peer.signalingState !== "closed") continue;
+
+      init(shouldCreateOffer(socket.id, user.id), user.id);
+    }
   }
 
   async function collectWebRtcStats() {

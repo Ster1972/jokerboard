@@ -8,8 +8,15 @@ import {
   BoundedIceCandidateQueue,
   SerializedOperations,
   addLocalTracks,
+  shouldCreateOffer,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
+
+test("deterministic peer ordering creates exactly one offer per pair", () => {
+  assert.equal(shouldCreateOffer("socket-a", "socket-b"), true);
+  assert.equal(shouldCreateOffer("socket-b", "socket-a"), false);
+  assert.equal(shouldCreateOffer("", "socket-b"), false);
+});
 
 test("addLocalTracks reuses senders and replaces tracks by media kind", async () => {
   const replacementCalls = [];

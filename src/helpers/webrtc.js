@@ -61,3 +61,9 @@ export function addLocalTracks(peer, stream) {
   }
   return true;
 }
+
+export function shouldCreateOffer(localId, remoteId) {
+  if (typeof localId !== "string" || typeof remoteId !== "string" ||
+      localId.length === 0 || remoteId.length === 0) return false;
+  return localId.localeCompare(remoteId) < 0;
+}
