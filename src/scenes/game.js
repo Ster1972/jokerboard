@@ -182,6 +182,7 @@ export default class Game extends Phaser.Scene {
           playerName4Text.text = result4.player
           sessionStorage.setItem('playerName4', result4.player )
         }
+        reconcilePeerConnections(users);
 
         });
     }
@@ -206,9 +207,6 @@ export default class Game extends Phaser.Scene {
     let { gameBoard, TopHome, RightHome, LeftHome, BottomHome, topHome, rightHome, leftHome, bottomHome } = boardHole(this)
     
  //----WebRTC 
-
-  //Get user video 
-  getAndSetUserStream();
 
  socket.on( 'new user', ( data ) => {
   socket.emit( 'newUserStart', { to: data.socketId, sender: socket.id} );
@@ -277,16 +275,7 @@ socket.on( 'sdp', async ( data ) => {
         }
         await peer.setRemoteDescription(new RTCSessionDescription(data.description));
 
-        if (!myStream) {
-          try {
-            await ensureUserStream();
-          } catch (error) {
-            console.error("stream error:", error);
-            return;
-          }
-        }
-
-        addLocalTracks(peer, myStream);
+        if (myStream) addLocalTracks(peer, myStream);
         configureCodecPreferences(peer);
 
         const answer = await peer.createAnswer();
@@ -349,6 +338,16 @@ document.getElementById('toggle-mute').addEventListener('click', (e) => {
   audioTrack.enabled = !audioTrack.enabled;
   document.getElementById('buttonAudio').className =
     audioTrack.enabled ? 'bi bi-mic-fill' : 'bi bi-mic-mute-fill';
+});
+
+document.getElementById("enable-media").addEventListener("click", async (event) => {
+  event.preventDefault();
+  await enableLocalMedia();
+});
+
+document.getElementById("enable-playback").addEventListener("click", async (event) => {
+  event.preventDefault();
+  await enableRemotePlayback();
 });
 
 socket.on('user-disconnected', (userId, playernum) => {
@@ -1043,10 +1042,67 @@ socket.on('updateName', (data, playernum) => {
 //---------------------------------------------
  // -- webRTC function
 
- function getAndSetUserStream() {
-  ensureUserStream().catch( ( e ) => {
-      console.error( `stream error: ${ e }` );
-  } );
+function setMediaStatus(message, isError = false) {
+  const status = document.getElementById("media-status");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("error", isError);
+}
+
+function getMediaErrorMessage(error) {
+  if (!h.userMediaAvailable()) {
+    return "Camera and microphone capture is unavailable in this browser.";
+  }
+  if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
+    return "Camera and microphone permission was denied. Allow access in browser settings, then try again.";
+  }
+  if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
+    return "No camera or microphone was found.";
+  }
+  if (error?.name === "NotReadableError" || error?.name === "TrackStartError") {
+    return "The camera or microphone is already in use or could not be started.";
+  }
+  return error?.message ? `Could not start camera and microphone: ${error.message}` : "Could not start camera and microphone.";
+}
+
+async function enableLocalMedia() {
+  const button = document.getElementById("enable-media");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Enabling...";
+  }
+  try {
+    const stream = await ensureUserStream();
+    for (const [partnerName, peer] of Object.entries(pc)) {
+      if (!isPeerCurrent(pc, partnerName, peer)) continue;
+      addLocalTracks(peer, stream);
+      peer.__mediaRenegotiationNeeded = true;
+      peer.__sendOffer?.(true);
+    }
+    setMediaStatus("Camera and microphone enabled.");
+    if (button) button.textContent = "Camera and microphone enabled";
+  } catch (error) {
+    console.error("Local media capture rejected:", error);
+    setMediaStatus(getMediaErrorMessage(error), true);
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Try enabling camera and microphone again";
+    }
+  }
+}
+
+async function enableRemotePlayback() {
+  let attempted = 0;
+  for (const video of document.querySelectorAll(".remote-video video")) {
+    try {
+      await video.play();
+      attempted++;
+    } catch (error) {
+      console.warn("Remote playback rejected:", error);
+    }
+  }
+  const button = document.getElementById("enable-playback");
+  if (attempted > 0 && button) button.hidden = true;
 }
 
  const webrtcDebugLog = [];
@@ -1211,11 +1267,6 @@ socket.on('updateName', (data, playernum) => {
     mediaStreamPromise = null;
   });
 
-  window.addEventListener("pageshow", (event) => {
-    if (!event.persisted) return;
-    getAndSetUserStream();
-  });
-
   async function init( createOffer, partnerName ) {
    console.log("init- create offer",partnerName)
    if (pc[partnerName] && ["connected", "connecting", "new"].includes(pc[partnerName].connectionState)) {
@@ -1231,7 +1282,7 @@ socket.on('updateName', (data, playernum) => {
 
      const peer = new RTCPeerConnection(ice);
      pc[partnerName] = peer;
-     peer.__shouldOffer = createOffer;
+     peer.__shouldOffer = shouldCreateOffer(socket.id, partnerName);
      peer.__polite = socket.id.localeCompare(partnerName) > 0;
      peer.__offerPending = false;
      peer.__generation = generation;
@@ -1246,20 +1297,125 @@ socket.on('updateName', (data, playernum) => {
          iceGatheringState: peer.iceGatheringState
        });
      };
-
-     try {
-       const stream = await ensureUserStream();
+     peer.onicecandidate = ({ candidate }) => {
        if (!isPeerCurrent(pc, partnerName, peer)) return;
-       addLocalTracks(peer, stream);
-       configureCodecPreferences(peer);
-     } catch (error) {
-       console.error("stream error:", error);
-     }
+       logWebRtc(partnerName, candidate ? "icecandidate.generated" : "icecandidate.gathering.complete", {
+         candidateType: candidate ? candidate.type : undefined,
+         sdpMid: candidate?.sdpMid,
+         sdpMLineIndex: candidate?.sdpMLineIndex
+       });
+       socket.emit("ice candidates", { candidate, to: partnerName, sender: socket.id });
+     };
+     peer.ontrack = (event) => {
+       if (!isPeerCurrent(pc, partnerName, peer)) return;
+       logWebRtc(partnerName, "ontrack", {
+         trackKind: event.track?.kind,
+         trackId: event.track?.id,
+         streams: event.streams?.length || 0,
+         muted: event.track?.muted,
+         readyState: event.track?.readyState
+       });
+       let remoteStream = remoteStreams.get(partnerName) || event.streams?.[0] || new MediaStream();
+       if (!remoteStreams.has(partnerName)) remoteStreams.set(partnerName, remoteStream);
+       if (event.track && !remoteStream.getTracks().includes(event.track)) {
+         remoteStream.addTrack(event.track);
+       }
 
-     const sendOffer = async () => {
+       let video = document.getElementById(`${partnerName}-video`);
+       if (!video) {
+         video = document.createElement("video");
+         video.id = `${partnerName}-video`;
+         video.autoplay = true;
+         video.playsInline = true;
+         video.className = "remote-video";
+         video.disablePictureInPicture = true;
+         document.getElementById("videos").appendChild(video);
+       }
+       video.srcObject = remoteStream;
+       video.play?.().catch((error) => {
+         if (error?.name !== "AbortError") console.warn("Remote video autoplay blocked:", error);
+         const playbackButton = document.getElementById("enable-playback");
+         if (playbackButton) playbackButton.hidden = false;
+       });
+       event.track?.addEventListener?.("ended", () => {
+         if (!isPeerCurrent(pc, partnerName, peer)) return;
+         if (!remoteStream.getTracks().includes(event.track)) return;
+         remoteStream.removeTrack(event.track);
+         const remainingVideo = remoteStream.getVideoTracks().length;
+         if (!remainingVideo) h.closeVideo(`${partnerName}-video`);
+         else video.srcObject = remoteStream;
+       }, { once: true });
+     };
+     peer.onconnectionstatechange = () => {
+       if (!isPeerCurrent(pc, partnerName, peer)) return;
+       logWebRtc(partnerName, "connectionstatechange", {
+         connectionState: peer.connectionState,
+         iceConnectionState: peer.iceConnectionState,
+         signalingState: peer.signalingState
+       });
+
+       switch (peer.connectionState || peer.iceConnectionState) {
+         case "connected":
+           const existingTimer = peerRecoveryTimers.get(partnerName);
+           if (existingTimer) {
+             clearTimeout(existingTimer);
+             peerRecoveryTimers.delete(partnerName);
+           }
+           startWebRtcMetrics();
+           break;
+         case "disconnected":
+           if (peerRecoveryTimers.has(partnerName)) break;
+           peerRecoveryTimers.set(partnerName, setTimeout(() => {
+             if (!isPeerCurrent(pc, partnerName, peer)) return;
+             if (typeof peer.restartIce === "function") peer.restartIce();
+             peerRecoveryTimers.set(partnerName, setTimeout(async () => {
+               if (!isPeerCurrent(pc, partnerName, peer)) return;
+               if (peer.connectionState === "connected") return;
+               const shouldOffer = peer.__shouldOffer === true;
+               closePeerConnection(partnerName, true);
+               await init(shouldOffer, partnerName);
+             }, 15000));
+           }, 5000));
+           break;
+         case "failed":
+           if (peerRecoveryTimers.has(partnerName)) break;
+           peerRecoveryTimers.set(partnerName, setTimeout(async () => {
+             if (!isPeerCurrent(pc, partnerName, peer)) return;
+             const shouldOffer = peer.__shouldOffer === true;
+             closePeerConnection(partnerName, true);
+             await init(shouldOffer, partnerName);
+           }, 2000));
+           break;
+         case "closed":
+           closePeerConnection(partnerName, true);
+           break;
+       }
+     };
+     peer.onsignalingstatechange = () => {
+       if (!isPeerCurrent(pc, partnerName, peer)) return;
+       logWebRtc(partnerName, "signalingstatechange", {
+         signalingState: peer.signalingState
+       });
+       if (peer.signalingState === "stable" &&
+           peer.__mediaRenegotiationNeeded &&
+           !peer.__offerPending) {
+         peer.__mediaRenegotiationNeeded = false;
+         peer.__sendOffer?.(true);
+       }
+       if (peer.signalingState === "closed") closePeerConnection(partnerName, true);
+     };
+
+     configureCodecPreferences(peer);
+
+     const sendOffer = async (force = false) => {
        if (!isPeerCurrent(pc, partnerName, peer) ||
-           !canCreateOffer(peer)) return;
-       peer.__offerPending = true;
+           (!force && !canCreateOffer(peer))) return;
+       if (force && (
+         peer.signalingState !== "stable" ||
+         peer.__offerPending
+       )) return;
+         if (force) peer.__mediaRenegotiationNeeded = false;
+         peer.__offerPending = true;
        const operations = signalingQueues.get(partnerName) || new SerializedOperations();
        signalingQueues.set(partnerName, operations);
        await operations.run(async () => {
@@ -1291,8 +1447,9 @@ socket.on('updateName', (data, playernum) => {
      peer.onnegotiationneeded = () => {
        if (peer.__shouldOffer === true && peer.signalingState === "stable") sendOffer();
      };
+     peer.__sendOffer = sendOffer;
 
-     if (createOffer) await sendOffer();
+     if (myStream && peer.__shouldOffer) await sendOffer();
    })();
 
    peerInitPromises.set(partnerName, initPromise);
@@ -1301,131 +1458,6 @@ socket.on('updateName', (data, playernum) => {
    } finally {
      if (peerInitPromises.get(partnerName) === initPromise) peerInitPromises.delete(partnerName);
    }
-
-
-
-  //send ice candidate to partnerNames
-  pc[partnerName].onicecandidate = ( { candidate } ) => {
-      logWebRtc(partnerName, candidate ? "icecandidate.generated" : "icecandidate.gathering.complete", {
-        candidateType: candidate ? candidate.type : undefined,
-        sdpMid: candidate?.sdpMid,
-        sdpMLineIndex: candidate?.sdpMLineIndex
-      });
-      socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
-  };
-
-
-
-  //add
-  pc[partnerName].ontrack = ( e ) => {
-      const peer = pc[partnerName];
-      if (!isPeerCurrent(pc, partnerName, peer)) return;
-      logWebRtc(partnerName, "ontrack", {
-        trackKind: e.track?.kind,
-        trackId: e.track?.id,
-        streams: e.streams?.length || 0,
-        muted: e.track?.muted,
-        readyState: e.track?.readyState
-      });
-      let remoteStream = remoteStreams.get(partnerName) || e.streams?.[0] || new MediaStream();
-      if (!remoteStreams.has(partnerName)) remoteStreams.set(partnerName, remoteStream);
-      if (e.track && !remoteStream.getTracks().includes(e.track)) {
-        remoteStream.addTrack(e.track);
-      }
-
-      let video = document.getElementById(`${partnerName}-video`);
-      if (!video) {
-        video = document.createElement("video");
-        video.id = `${partnerName}-video`;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.className = "remote-video";
-        video.disablePictureInPicture = true;
-        document.getElementById("videos").appendChild(video);
-      }
-      video.srcObject = remoteStream;
-      video.play?.().catch((error) => {
-        if (error?.name !== "AbortError") console.warn("Remote video autoplay blocked:", error);
-      });
-      e.track?.addEventListener?.("ended", () => {
-        if (!isPeerCurrent(pc, partnerName, peer)) return;
-        if (!remoteStream.getTracks().includes(e.track)) return;
-        remoteStream.removeTrack(e.track);
-        const remainingVideo = remoteStream.getVideoTracks().length;
-        if (!remainingVideo) h.closeVideo(`${partnerName}-video`);
-        else video.srcObject = remoteStream;
-      }, { once: true });
-  };
-
-
-
-  pc[partnerName].onconnectionstatechange = ( d ) => {
-      const peer = pc[partnerName];
-      if (!peer) return;
-      if (!isPeerCurrent(pc, partnerName, peer)) return;
-      logWebRtc(partnerName, "connectionstatechange", {
-        connectionState: peer.connectionState,
-        iceConnectionState: peer.iceConnectionState,
-        signalingState: peer.signalingState
-      });
-
-      switch (peer.connectionState || peer.iceConnectionState) {
-          case 'connected':
-              const existingTimer = peerRecoveryTimers.get(partnerName);
-              if (existingTimer) {
-                clearTimeout(existingTimer);
-                peerRecoveryTimers.delete(partnerName);
-              }
-              startWebRtcMetrics();
-              break;
-          case 'disconnected':
-              if (peerRecoveryTimers.has(partnerName)) break;
-              peerRecoveryTimers.set(partnerName, setTimeout(() => {
-                if (!isPeerCurrent(pc, partnerName, peer)) return;
-                if (typeof peer.restartIce === "function") {
-                  peer.restartIce();
-                }
-                peerRecoveryTimers.set(partnerName, setTimeout(async () => {
-                  if (!isPeerCurrent(pc, partnerName, peer)) return;
-                  if (peer.connectionState === "connected") return;
-                  const shouldOffer = peer.__shouldOffer === true;
-                  closePeerConnection(partnerName, true);
-                  await init(shouldOffer, partnerName);
-                }, 15000));
-              }, 5000));
-              break;
-          case 'failed':
-              if (peerRecoveryTimers.has(partnerName)) break;
-              peerRecoveryTimers.set(partnerName, setTimeout(async () => {
-                if (!isPeerCurrent(pc, partnerName, peer)) return;
-                const shouldOffer = peer.__shouldOffer === true;
-                closePeerConnection(partnerName, true);
-                await init(shouldOffer, partnerName);
-              }, 2000));
-              break;
-          case 'closed':
-              closePeerConnection(partnerName, true);
-              break;
-      }
-  };
-
-
-
-  pc[partnerName].onsignalingstatechange = ( d ) => {
-      const peer = pc[partnerName];
-      if (!peer || !isPeerCurrent(pc, partnerName, peer)) return;
-      logWebRtc(partnerName, "signalingstatechange", {
-        signalingState: peer.signalingState
-      });
-      switch ( peer.signalingState ) {
-          case 'closed':
-              //console.log( "Signalling state is 'closed'" );
-              if (isPeerCurrent(pc, partnerName, pc[partnerName])) {
-                closePeerConnection(partnerName, true);
-              }
-              break;
-      }
-  };
 }  // end of function
 
 //============================================

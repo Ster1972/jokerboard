@@ -37,6 +37,27 @@
             margin-right: auto;
             
         }
+
+        .media-controls {
+            text-align: center;
+            padding: 5px;
+        }
+
+        .media-status {
+            min-height: 1.5em;
+            margin-bottom: 4px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        .media-status.error {
+            color: #dc3545;
+        }
+
+        #enable-media,
+        #enable-playback {
+            margin: 3px;
+        }
         
         
         </style>
@@ -44,6 +65,18 @@
 
 <div>
     <video class="local-video block" id='local' volume="0" preload='none' autoplay muted playsinline disablepictureinpicture></video>
+</div>
+
+<div class="media-controls">
+    <div class="media-status" id="media-status" role="status" aria-live="polite">
+        Camera and microphone are off until enabled.
+    </div>
+    <button type="button" class="btn btn-primary btn-sm" id="enable-media">
+        Enable camera and microphone
+    </button>
+    <button type="button" class="btn btn-primary btn-sm" id="enable-playback" hidden>
+        Enable audio/video
+    </button>
 </div>
 
 <div class="buttons">
