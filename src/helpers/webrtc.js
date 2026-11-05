@@ -89,6 +89,30 @@ export function getBrowserWebRtcCapabilities() {
   };
 }
 
+export function validateIceServerConfig(config) {
+  if (!config || !Array.isArray(config.iceServers)) {
+    return { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+  }
+
+  const iceServers = config.iceServers.map((server) => {
+    const urls = Array.isArray(server?.urls) ? server.urls : [server?.urls];
+    const validUrls = urls.filter((url) =>
+      typeof url === "string" &&
+      /^(stun|turn|turns):/i.test(url.trim())
+    );
+    if (!validUrls.length) return null;
+    const cleaned = { urls: validUrls };
+    if (typeof server.username === "string") cleaned.username = server.username;
+    if (typeof server.credential === "string") cleaned.credential = server.credential;
+    return cleaned;
+  }).filter(Boolean);
+
+  if (!iceServers.length) {
+    return { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+  }
+  return { iceServers };
+}
+
 export function configureCodecPreferences(peer, preferredCodecs = ["vp8", "h264", "vp9"]) {
   if (!peer?.getTransceivers || !globalThis.RTCRtpSender?.getCapabilities) return 0;
 

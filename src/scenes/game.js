@@ -13,6 +13,7 @@ import {
   shouldCreateOffer,
   canCreateOffer,
   configureCodecPreferences,
+  validateIceServerConfig,
   isPeerCurrent
 } from "../helpers/webrtc.js"
 
@@ -1127,7 +1128,7 @@ socket.on('updateName', (data, playernum) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        resolve(ice || { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
+        resolve(validateIceServerConfig(ice));
       });
     });
   }

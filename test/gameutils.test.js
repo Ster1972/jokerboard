@@ -11,6 +11,7 @@ import {
   shouldCreateOffer,
   canCreateOffer,
   getBrowserWebRtcCapabilities,
+  validateIceServerConfig,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
 
@@ -18,6 +19,19 @@ test("browser capability detection reports WebRTC API availability safely", () =
   const capabilities = getBrowserWebRtcCapabilities();
   assert.equal(typeof capabilities.peerConnection, "boolean");
   assert.equal(typeof capabilities.videoPlayback, "boolean");
+});
+
+test("invalid ICE URL values are removed instead of passed to RTCPeerConnection", () => {
+  const config = validateIceServerConfig({
+    iceServers: [
+      { urls: ["not-a-valid-secret-token"] },
+      { urls: ["turn:turn.example.com:3478"], username: "u", credential: "c" }
+    ]
+  });
+
+  assert.deepEqual(config, {
+    iceServers: [{ urls: ["turn:turn.example.com:3478"], username: "u", credential: "c" }]
+  });
 });
 
 test("deterministic peer ordering creates exactly one offer per pair", () => {

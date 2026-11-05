@@ -29,6 +29,7 @@ const socketLimits = new Map();
 const marbleSnapshotSequences = new Map();
 const TURN_CREDENTIAL_LIFETIME_SECONDS = 55 * 60;
 let iceServerCache = null;
+let iceServerFetchPromise = null;
 
 function checkLimit(socket, event, limit = 30, windowMs = 1000) {
   const now = Date.now();
@@ -79,6 +80,13 @@ function isValidIceCandidate(candidate) {
        candidate.sdpMLineIndex < 0 ||
        candidate.sdpMLineIndex > 1024)) return false;
   return true;
+}
+
+function getValidTurnUrls(value) {
+  if (typeof value !== "string") return [];
+  return value.split(",")
+    .map((url) => url.trim())
+    .filter((url) => /^turns?:\/\//i.test(url) || /^stuns?:\/\//i.test(url));
 }
 
 io.on("connection", (socket) => {
@@ -168,10 +176,15 @@ io.on("connection", (socket) => {
       socket.on('getIceServer_Info', (ack) => {
         const member = getSessionUser(socket, roomName);
         if (!member) return typeof ack === "function" ? ack(null) : undefined;
-        const config = createIceServer();
-        if (typeof ack === "function") ack(config);
-        else socket.emit('iceserver', config);
-      })
+        createIceServer().then((config) => {
+          if (typeof ack === "function") ack(config);
+          else socket.emit('iceserver', config);
+        }).catch(() => {
+          const fallback = { iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] };
+          if (typeof ack === "function") ack(fallback);
+          else socket.emit('iceserver', fallback);
+        });
+      });
   
       
 
@@ -321,7 +334,7 @@ io.on("connection", (socket) => {
 });
 // ----- FUNCTION Section -----------
 
-function createIceServer() {
+async function createIceServer() {
   if (iceServerCache && iceServerCache.expiresAt > Date.now()) {
     return { iceServers: iceServerCache.iceServers };
   }
@@ -333,7 +346,8 @@ function createIceServer() {
     ]
   }];
 
-  if (process.env.TURN_URLS && process.env.TURN_SECRET) {
+  const turnUrls = getValidTurnUrls(process.env.TURN_URLS);
+  if (turnUrls.length > 0 && process.env.TURN_SECRET) {
     const expiresAt = Math.floor(Date.now() / 1000) + TURN_CREDENTIAL_LIFETIME_SECONDS;
     const username = `${expiresAt}:${crypto.randomBytes(8).toString("hex")}`;
     const credential = crypto.createHmac("sha1", process.env.TURN_SECRET)
@@ -342,15 +356,85 @@ function createIceServer() {
     iceServers.push({
       username,
       credential,
-      urls: process.env.TURN_URLS.split(",").map((url) => url.trim()).filter(Boolean)
+      urls: turnUrls
     });
   }
 
+  let xirsysConfigured = false;
+  let xirsysServersAdded = false;
+  if (process.env.XIRSYS_IDENT && process.env.XIRSYS_SECRET && process.env.XIRSYS_CHANNEL) {
+    xirsysConfigured = true;
+    if (!iceServerFetchPromise) {
+      iceServerFetchPromise = fetchXirsysIceServers().catch((error) => {
+        console.error("Unable to obtain Xirsys ICE servers:", error.message);
+        return null;
+      }).finally(() => {
+        iceServerFetchPromise = null;
+      });
+    }
+
+    const xirsysIceServers = await iceServerFetchPromise;
+    if (Array.isArray(xirsysIceServers) && xirsysIceServers.length > 0) {
+      iceServers.push(...xirsysIceServers);
+      xirsysServersAdded = true;
+    }
+  }
+
   iceServerCache = {
-    expiresAt: Date.now() + TURN_CREDENTIAL_LIFETIME_SECONDS * 1000 - 60_000,
+    expiresAt: Date.now() + (xirsysConfigured && !xirsysServersAdded
+      ? 30_000
+      : TURN_CREDENTIAL_LIFETIME_SECONDS * 1000 - 60_000),
     iceServers
   };
   return { iceServers };
+}
+
+async function fetchXirsysIceServers() {
+  const pathValue = process.env.XIRSYS_PATH || "https://global.xirsys.net";
+  const channel = process.env.XIRSYS_CHANNEL;
+  if (!/^https:\/\//i.test(pathValue) || !/^[-A-Za-z0-9_]{1,128}$/.test(channel || "")) {
+    throw new Error("Invalid Xirsys configuration");
+  }
+
+  const url = `${pathValue.replace(/\/+$/, "")}/_turn/${encodeURIComponent(channel)}`;
+  const auth = Buffer.from(
+    `${process.env.XIRSYS_IDENT}:${process.env.XIRSYS_SECRET}`,
+    "utf8"
+  ).toString("base64");
+
+  const response = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({}),
+    signal: AbortSignal.timeout(5000)
+  });
+
+  if (!response.ok) {
+    throw new Error(`Xirsys returned HTTP ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const servers = payload?.v?.iceServers ?? payload?.v?.ice_servers ?? payload?.v;
+  if (!Array.isArray(servers)) return null;
+
+  return servers.map((server) => {
+    const urls = Array.isArray(server?.urls)
+      ? server.urls
+      : (typeof server?.urls === "string" ? [server.urls] : []);
+    const validUrls = urls.filter((url) =>
+      typeof url === "string" &&
+      /^(stun|turn|turns):/i.test(url.trim())
+    );
+    if (!validUrls.length) return null;
+
+    const cleaned = { urls: validUrls };
+    if (typeof server.username === "string") cleaned.username = server.username;
+    if (typeof server.credential === "string") cleaned.credential = server.credential;
+    return cleaned;
+  }).filter(Boolean);
 }
 
 
