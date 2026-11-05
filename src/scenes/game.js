@@ -12,6 +12,7 @@ import {
   addLocalTracks,
   shouldCreateOffer,
   canCreateOffer,
+  configureCodecPreferences,
   isPeerCurrent
 } from "../helpers/webrtc.js"
 
@@ -181,8 +182,6 @@ export default class Game extends Phaser.Scene {
           sessionStorage.setItem('playerName4', result4.player )
         }
 
-        reconcilePeerConnections(users);
-        
         });
     }
 
@@ -221,6 +220,9 @@ export default class Game extends Phaser.Scene {
   } );
 
 socket.on( 'ice candidates', async ( data ) => {
+ logWebRtc(data.sender, "icecandidate.received", {
+   hasCandidate: Boolean(data.candidate)
+ });
  const peer = pc[data.sender];
  if (!peer) {
    if (!candidateQueues.has(data.sender)) candidateQueues.set(data.sender, new BoundedIceCandidateQueue());
@@ -262,6 +264,10 @@ socket.on( 'sdp', async ( data ) => {
 
       if (data.description.type === "offer") {
         const collision = peer.signalingState !== "stable";
+        logWebRtc(data.sender, "setRemoteDescription.offer.start", {
+          signalingState: peer.signalingState,
+          collision
+        });
         const ignoreOffer = !peer.__polite && collision;
         if (ignoreOffer) return;
 
@@ -280,9 +286,17 @@ socket.on( 'sdp', async ( data ) => {
         }
 
         addLocalTracks(peer, myStream);
+        configureCodecPreferences(peer);
 
         const answer = await peer.createAnswer();
+        logWebRtc(data.sender, "createAnswer.success", {
+          signalingState: peer.signalingState
+        });
         await peer.setLocalDescription(answer);
+        logWebRtc(data.sender, "setLocalDescription.answer.success", {
+          signalingState: peer.signalingState,
+          localDescriptionType: peer.localDescription?.type
+        });
         socket.emit("sdp", {
           description: peer.localDescription,
           to: data.sender,
@@ -290,12 +304,23 @@ socket.on( 'sdp', async ( data ) => {
         });
       } else {
         if (peer.signalingState !== "have-local-offer") return;
+        logWebRtc(data.sender, "setRemoteDescription.answer.start", {
+          signalingState: peer.signalingState
+        });
         await peer.setRemoteDescription(new RTCSessionDescription(data.description));
+        logWebRtc(data.sender, "setRemoteDescription.answer.success", {
+          signalingState: peer.signalingState,
+          remoteDescriptionType: peer.remoteDescription?.type
+        });
       }
 
       await flushPendingCandidates(data.sender, peer);
     });
   } catch (error) {
+      logWebRtc(data.sender, "sdp.negotiation.rejected", {
+        errorName: error?.name,
+        errorMessage: error?.message
+      });
       console.error("SDP negotiation rejected:", error);
   }
 } );
@@ -1023,6 +1048,15 @@ socket.on('updateName', (data, playernum) => {
   } );
 }
 
+ const webrtcDebugLog = [];
+ function logWebRtc(peerId, event, detail = {}) {
+   const entry = { timestamp: Date.now(), peerId, event, ...detail };
+   webrtcDebugLog.push(entry);
+   if (webrtcDebugLog.length > 200) webrtcDebugLog.shift();
+   window.__jokerWebRtcDebug = webrtcDebugLog;
+   console.debug("[WebRTC]", entry);
+ }
+
  function ensureUserStream() {
   if (myStream) return Promise.resolve(myStream);
   if (!mediaStreamPromise) {
@@ -1060,6 +1094,8 @@ socket.on('updateName', (data, playernum) => {
    if (peer) {
      peer.onicecandidate = null;
      peer.onnegotiationneeded = null;
+     peer.oniceconnectionstatechange = null;
+     peer.onicegatheringstatechange = null;
      peer.ontrack = null;
      peer.onconnectionstatechange = null;
      peer.onsignalingstatechange = null;
@@ -1195,14 +1231,26 @@ socket.on('updateName', (data, playernum) => {
      const peer = new RTCPeerConnection(ice);
      pc[partnerName] = peer;
      peer.__shouldOffer = createOffer;
-     peer.__polite = !createOffer || socket.id.localeCompare(partnerName) > 0;
+     peer.__polite = socket.id.localeCompare(partnerName) > 0;
      peer.__offerPending = false;
      peer.__generation = generation;
+     peer.oniceconnectionstatechange = () => {
+       logWebRtc(partnerName, "iceconnectionstatechange", {
+         iceConnectionState: peer.iceConnectionState,
+         connectionState: peer.connectionState
+       });
+     };
+     peer.onicegatheringstatechange = () => {
+       logWebRtc(partnerName, "icegatheringstatechange", {
+         iceGatheringState: peer.iceGatheringState
+       });
+     };
 
      try {
        const stream = await ensureUserStream();
        if (!isPeerCurrent(pc, partnerName, peer)) return;
        addLocalTracks(peer, stream);
+       configureCodecPreferences(peer);
      } catch (error) {
        console.error("stream error:", error);
      }
@@ -1215,8 +1263,18 @@ socket.on('updateName', (data, playernum) => {
        signalingQueues.set(partnerName, operations);
        await operations.run(async () => {
          if (!isPeerCurrent(pc, partnerName, peer) || peer.signalingState !== "stable") return;
+         configureCodecPreferences(peer);
          const offer = await peer.createOffer();
+         logWebRtc(partnerName, "createOffer.success", {
+           signalingState: peer.signalingState,
+           offerMLineCount: (offer.sdp?.match(/^m=/gm) || []).length
+         });
          await peer.setLocalDescription(offer);
+         logWebRtc(partnerName, "setLocalDescription.offer.success", {
+           signalingState: peer.signalingState,
+           localDescriptionType: peer.localDescription?.type,
+           iceGatheringState: peer.iceGatheringState
+         });
          if (!isPeerCurrent(pc, partnerName, peer)) return;
          socket.emit("sdp", {
            description: peer.localDescription,
@@ -1247,6 +1305,11 @@ socket.on('updateName', (data, playernum) => {
 
   //send ice candidate to partnerNames
   pc[partnerName].onicecandidate = ( { candidate } ) => {
+      logWebRtc(partnerName, candidate ? "icecandidate.generated" : "icecandidate.gathering.complete", {
+        candidateType: candidate ? candidate.type : undefined,
+        sdpMid: candidate?.sdpMid,
+        sdpMLineIndex: candidate?.sdpMLineIndex
+      });
       socket.emit( 'ice candidates', { candidate: candidate, to: partnerName, sender: socket.id } );
   };
 
@@ -1256,6 +1319,13 @@ socket.on('updateName', (data, playernum) => {
   pc[partnerName].ontrack = ( e ) => {
       const peer = pc[partnerName];
       if (!isPeerCurrent(pc, partnerName, peer)) return;
+      logWebRtc(partnerName, "ontrack", {
+        trackKind: e.track?.kind,
+        trackId: e.track?.id,
+        streams: e.streams?.length || 0,
+        muted: e.track?.muted,
+        readyState: e.track?.readyState
+      });
       let remoteStream = remoteStreams.get(partnerName) || e.streams?.[0] || new MediaStream();
       if (!remoteStreams.has(partnerName)) remoteStreams.set(partnerName, remoteStream);
       if (e.track && !remoteStream.getTracks().includes(e.track)) {
@@ -1292,6 +1362,11 @@ socket.on('updateName', (data, playernum) => {
       const peer = pc[partnerName];
       if (!peer) return;
       if (!isPeerCurrent(pc, partnerName, peer)) return;
+      logWebRtc(partnerName, "connectionstatechange", {
+        connectionState: peer.connectionState,
+        iceConnectionState: peer.iceConnectionState,
+        signalingState: peer.signalingState
+      });
 
       switch (peer.connectionState || peer.iceConnectionState) {
           case 'connected':
@@ -1338,6 +1413,9 @@ socket.on('updateName', (data, playernum) => {
   pc[partnerName].onsignalingstatechange = ( d ) => {
       const peer = pc[partnerName];
       if (!peer || !isPeerCurrent(pc, partnerName, peer)) return;
+      logWebRtc(partnerName, "signalingstatechange", {
+        signalingState: peer.signalingState
+      });
       switch ( peer.signalingState ) {
           case 'closed':
               //console.log( "Signalling state is 'closed'" );

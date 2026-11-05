@@ -43,7 +43,9 @@ export function isPeerCurrent(registry, peerId, peer) {
 export function addLocalTracks(peer, stream) {
   if (!peer || !stream?.getTracks) return false;
 
-  const tracks = stream.getTracks();
+  const tracks = [...stream.getTracks()].sort((left, right) =>
+    left.kind === "audio" ? -1 : right.kind === "audio" ? 1 : 0
+  );
   if (!tracks.length) return false;
   const senders = peer.getSenders?.() || [];
 
@@ -74,4 +76,43 @@ export function canCreateOffer(peer) {
     peer.signalingState === "stable" &&
     !peer.__offerPending
   );
+}
+
+export function getBrowserWebRtcCapabilities() {
+  return {
+    peerConnection: typeof globalThis.RTCPeerConnection === "function",
+    sessionDescription: typeof globalThis.RTCSessionDescription === "function",
+    iceCandidate: typeof globalThis.RTCIceCandidate === "function",
+    addTransceiver: typeof globalThis.RTCRtpTransceiver === "function",
+    senderCapabilities: typeof globalThis.RTCRtpSender?.getCapabilities === "function",
+    videoPlayback: typeof globalThis.document?.createElement === "function"
+  };
+}
+
+export function configureCodecPreferences(peer, preferredCodecs = ["vp8", "h264", "vp9"]) {
+  if (!peer?.getTransceivers || !globalThis.RTCRtpSender?.getCapabilities) return 0;
+
+  const capabilities = RTCRtpSender.getCapabilities("video");
+  if (!capabilities?.codecs?.length) return 0;
+
+  let preferred = [];
+  for (const name of preferredCodecs) {
+    for (const codec of capabilities.codecs) {
+      const codecName = (codec.mimeType || "").toLowerCase();
+      if (codecName.includes(name) && !preferred.includes(codec)) preferred.push(codec);
+    }
+  }
+  for (const codec of capabilities.codecs) {
+    if (!preferred.includes(codec)) preferred.push(codec);
+  }
+
+  let updated = 0;
+  for (const transceiver of peer.getTransceivers()) {
+    const kind = transceiver.receiver?.track?.kind || transceiver.sender?.track?.kind;
+    if (kind === "video" && typeof transceiver.setCodecPreferences === "function") {
+      transceiver.setCodecPreferences(preferred);
+      updated++;
+    }
+  }
+  return updated;
 }

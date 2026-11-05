@@ -10,8 +10,15 @@ import {
   addLocalTracks,
   shouldCreateOffer,
   canCreateOffer,
+  getBrowserWebRtcCapabilities,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
+
+test("browser capability detection reports WebRTC API availability safely", () => {
+  const capabilities = getBrowserWebRtcCapabilities();
+  assert.equal(typeof capabilities.peerConnection, "boolean");
+  assert.equal(typeof capabilities.videoPlayback, "boolean");
+});
 
 test("deterministic peer ordering creates exactly one offer per pair", () => {
   assert.equal(shouldCreateOffer("socket-a", "socket-b"), true);
