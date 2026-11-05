@@ -8,6 +8,10 @@ import path from "path";
 import crypto from "crypto";
 import { createHands, isAlphanumeric } from "./src/helpers/gameutils.js";
 import { RoomGameStore } from "./src/helpers/serverstate.js";
+import {
+  TURN_CREDENTIAL_LIFETIME_SECONDS,
+  getIceServerCacheLifetimeMs
+} from "./src/helpers/icecredentials.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -27,7 +31,6 @@ server.listen(PORT, () => {
 const store = new RoomGameStore();
 const socketLimits = new Map();
 const marbleSnapshotSequences = new Map();
-const TURN_CREDENTIAL_LIFETIME_SECONDS = 55 * 60;
 let iceServerCache = null;
 let iceServerFetchPromise = null;
 
@@ -381,9 +384,10 @@ async function createIceServer() {
   }
 
   iceServerCache = {
-    expiresAt: Date.now() + (xirsysConfigured && !xirsysServersAdded
-      ? 30_000
-      : TURN_CREDENTIAL_LIFETIME_SECONDS * 1000 - 60_000),
+    expiresAt: Date.now() + getIceServerCacheLifetimeMs({
+      xirsysConfigured,
+      xirsysServersAdded
+    }),
     iceServers
   };
   return { iceServers };

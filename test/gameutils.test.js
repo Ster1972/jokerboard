@@ -14,6 +14,21 @@ import {
   validateIceServerConfig,
   isPeerCurrent
 } from "../src/helpers/webrtc.js";
+import {
+  getIceServerCacheLifetimeMs
+} from "../src/helpers/icecredentials.js";
+
+test("ICE credential cache expires before provider credential lifetimes", () => {
+  assert.equal(getIceServerCacheLifetimeMs({
+    xirsysConfigured: true,
+    xirsysServersAdded: true
+  }), 50_000);
+  assert.equal(getIceServerCacheLifetimeMs({
+    xirsysConfigured: true,
+    xirsysServersAdded: false
+  }), 30_000);
+  assert.equal(getIceServerCacheLifetimeMs(), 54 * 60 * 1000);
+});
 
 test("browser capability detection reports WebRTC API availability safely", () => {
   const capabilities = getBrowserWebRtcCapabilities();
