@@ -396,7 +396,7 @@ async function fetchXirsysIceServers() {
     throw new Error("Invalid Xirsys configuration");
   }
 
-  const url = `${pathValue.replace(/\/+$/, "")}/_turn/${encodeURIComponent(channel)}`;
+  const url = `${pathValue.replace(/\/+$/, "")}/_turn/${encodeURIComponent(channel)}?webrtc=1`;
   const auth = Buffer.from(
     `${process.env.XIRSYS_IDENT}:${process.env.XIRSYS_SECRET}`,
     "utf8"
