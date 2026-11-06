@@ -105,7 +105,7 @@ export default class Game extends Phaser.Scene {
     let webrtcStatsInterval = null
 
     // add dom to scene - used for WEBRTC stuff 
-    this.add.dom(1375, 250).createFromCache('videodom');
+    this.add.dom(1375, 170).createFromCache('videodom');
 
     // Circle for connected players
     let c1 = this.add.circle(975, 105, 11, 0x000000)
@@ -355,6 +355,7 @@ socket.on('user-disconnected', (userId, playernum) => {
   closePeerConnection(userId, true);
   if (document.getElementById( `${userId}-video`) ) {
       document.getElementById( `${userId}-video`).remove();
+      updateRemotePlaybackButton();
       if(playernum === '1') {
         playerName1Text.text = ''
         sessionStorage.removeItem('playerName1')
@@ -1042,29 +1043,6 @@ socket.on('updateName', (data, playernum) => {
 //---------------------------------------------
  // -- webRTC function
 
-function setMediaStatus(message, isError = false) {
-  const status = document.getElementById("media-status");
-  if (!status) return;
-  status.textContent = message;
-  status.classList.toggle("error", isError);
-}
-
-function getMediaErrorMessage(error) {
-  if (!h.userMediaAvailable()) {
-    return "Camera and microphone capture is unavailable in this browser.";
-  }
-  if (error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError") {
-    return "Camera and microphone permission was denied. Allow access in browser settings, then try again.";
-  }
-  if (error?.name === "NotFoundError" || error?.name === "DevicesNotFoundError") {
-    return "No camera or microphone was found.";
-  }
-  if (error?.name === "NotReadableError" || error?.name === "TrackStartError") {
-    return "The camera or microphone is already in use or could not be started.";
-  }
-  return error?.message ? `Could not start camera and microphone: ${error.message}` : "Could not start camera and microphone.";
-}
-
 async function enableLocalMedia() {
   const button = document.getElementById("enable-media");
   if (button) {
@@ -1079,11 +1057,9 @@ async function enableLocalMedia() {
       peer.__mediaRenegotiationNeeded = true;
       peer.__sendOffer?.(true);
     }
-    setMediaStatus("Camera and microphone enabled.");
-    if (button) button.textContent = "Camera and microphone enabled";
+    if (button) button.hidden = true;
   } catch (error) {
     console.error("Local media capture rejected:", error);
-    setMediaStatus(getMediaErrorMessage(error), true);
     if (button) {
       button.disabled = false;
       button.textContent = "Try enabling camera and microphone again";
@@ -1092,17 +1068,33 @@ async function enableLocalMedia() {
 }
 
 async function enableRemotePlayback() {
-  let attempted = 0;
+  const button = document.getElementById("enable-playback");
+  let allPlaybackStarted = true;
   for (const video of document.querySelectorAll(".remote-video video")) {
     try {
       await video.play();
-      attempted++;
     } catch (error) {
       console.warn("Remote playback rejected:", error);
+      allPlaybackStarted = false;
     }
   }
+  if (button) button.hidden = allPlaybackStarted;
+}
+
+async function updateRemotePlaybackButton() {
+  const videos = document.querySelectorAll(".remote-video video");
   const button = document.getElementById("enable-playback");
-  if (attempted > 0 && button) button.hidden = true;
+  if (!button) return;
+
+  let playbackBlocked = false;
+  for (const video of videos) {
+    try {
+      await video.play();
+    } catch (error) {
+      playbackBlocked = true;
+    }
+  }
+  button.hidden = !playbackBlocked;
 }
 
  const webrtcDebugLog = [];
@@ -1332,10 +1324,11 @@ async function enableRemotePlayback() {
          document.getElementById("videos").appendChild(video);
        }
        video.srcObject = remoteStream;
-       video.play?.().catch((error) => {
+       video.play?.().then(() => {
+         updateRemotePlaybackButton();
+       }).catch((error) => {
          if (error?.name !== "AbortError") console.warn("Remote video autoplay blocked:", error);
-         const playbackButton = document.getElementById("enable-playback");
-         if (playbackButton) playbackButton.hidden = false;
+         updateRemotePlaybackButton();
        });
        event.track?.addEventListener?.("ended", () => {
          if (!isPeerCurrent(pc, partnerName, peer)) return;
@@ -1344,6 +1337,7 @@ async function enableRemotePlayback() {
          const remainingVideo = remoteStream.getVideoTracks().length;
          if (!remainingVideo) h.closeVideo(`${partnerName}-video`);
          else video.srcObject = remoteStream;
+         updateRemotePlaybackButton();
        }, { once: true });
      };
      peer.onconnectionstatechange = () => {
