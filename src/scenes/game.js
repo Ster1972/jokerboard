@@ -480,6 +480,66 @@ socket.on('updateName', (data, playernum) => {
     }
 
     const keys = Object.keys(playerBallLookup)
+    const blueMarbles = [r1, r2, r3, r4, r5]
+    const yellowMarbles = [l1, l2, l3, l4, l5]
+    const redMarbles = [b1, b2, b3, b4, b5]
+    const greenMarbles = [t1, t2, t3, t4, t5]
+    const yellowBlueMarblesGroup = [...yellowMarbles, ...blueMarbles]
+    const greenRedMarblesGroup = [...greenMarbles, ...redMarbles]
+    const snapTargets = [gameBoard, topHome, leftHome, rightHome, bottomHome]
+    const allMarbles = Object.values(playerBallLookup)
+    const entryHomes = [TopHome, RightHome, LeftHome, BottomHome]
+    const homeObjects = new Map([
+      [TopHome, allMarbles],
+      [RightHome, allMarbles],
+      [LeftHome, allMarbles],
+      [BottomHome, allMarbles],
+      [topHome, greenMarbles],
+      [rightHome, blueMarbles],
+      [leftHome, yellowMarbles],
+      [bottomHome, redMarbles]
+    ])
+    const homeByColor = {
+      g: topHome,
+      b: rightHome,
+      y: leftHome,
+      r: bottomHome
+    }
+    let homeOccupancyCache = null
+    const getHomeOccupants = (home) => {
+      if (!homeOccupancyCache) {
+        homeOccupancyCache = new Map()
+        for (const [homeObject, marbles] of homeObjects) {
+          const occupants = new Set()
+          this.physics.world.overlap(marbles, homeObject, (marble) => {
+            occupants.add(marble)
+          })
+          homeOccupancyCache.set(homeObject, occupants)
+        }
+      }
+      const occupants = homeOccupancyCache.get(home)
+      if (!occupants) throw new Error("Unknown home object")
+      return occupants
+    }
+    const updateHomeOccupancy = (marble) => {
+      if (!homeOccupancyCache) return
+      for (const occupants of homeOccupancyCache.values()) {
+        occupants.delete(marble)
+      }
+      for (const home of entryHomes) {
+        if (this.physics.world.overlap(marble, home)) {
+          homeOccupancyCache.get(home).add(marble)
+        }
+      }
+      const ownHome = homeByColor[marble.frame.name]
+      if (ownHome && this.physics.world.overlap(marble, ownHome)) {
+        homeOccupancyCache.get(ownHome).add(marble)
+      }
+    }
+    const homeHasMarble = (home, marbles) => {
+      const occupants = getHomeOccupants(home)
+      return marbles.some((marble) => occupants.has(marble))
+    }
     const marbleSnapshotBaseline = new Map(
       Object.entries(playerBallLookup).map(([name, marble]) => [
         name,
@@ -698,7 +758,20 @@ socket.on('updateName', (data, playernum) => {
      });
 
     this.input.on("dragend", (pointer, gameObject, dropped) => {
-      if (keys.includes(gameObject.name)) {
+      const isMarble = keys.includes(gameObject.name)
+      let ghf = false
+      let bhf = false
+      let rhf = false
+      let yhf = false
+
+      if (isMarble) {
+        ghf = homefull(greenMarbles, topHome)
+        bhf = homefull(blueMarbles, rightHome)
+        rhf = homefull(redMarbles, bottomHome)
+        yhf = homefull(yellowMarbles, leftHome)
+      }
+
+      if (isMarble) {
         const finalPosition = {
           name: gameObject.name,
           x: gameObject.x,
@@ -708,11 +781,6 @@ socket.on('updateName', (data, playernum) => {
         lastSentMarblePosition = finalPosition;
         lastMovementSentAt = performance.now();
       }
-
-      let ghf = homefull(t1, t2, t3, t4, t5, topHome)
-      let bhf = homefull(r1, r2, r3, r4, r5, rightHome)
-      let rhf = homefull(b1, b2, b3, b4, b5, bottomHome)
-      let yhf = homefull(l1, l2, l3, l4, l5, leftHome)
 
       if (!dropped && !keys.includes(gameObject.name)) {  // if card is not dropped in dropZone return to hand
         gameObject.x = gameObject.input.dragStartX
@@ -737,11 +805,11 @@ socket.on('updateName', (data, playernum) => {
         }
          
           //-- causes marble to snap into place
-          this.physics.world.overlap(gameObject, [gameBoard, topHome, leftHome, rightHome, bottomHome], snapMarble, null, this);
+          this.physics.world.overlap(gameObject, snapTargets, snapMarble, null, this);
 
           //-- handles moving marbles for players
-          this.physics.world.overlap(gameObject, [l1, l2, l3, l4, l5, r1, r2, r3, r4, r5], yellowBlueMarbles)
-          this.physics.world.overlap(gameObject, [t1,t2,t3,t4,t5,b1,b2,b3,b4,b5], greenRedMarbles)
+          this.physics.world.overlap(gameObject, yellowBlueMarblesGroup, yellowBlueMarbles)
+          this.physics.world.overlap(gameObject, greenRedMarblesGroup, greenRedMarbles)
           const newGameButtonStatus = this.resetGame.visible;
           const changes = [];
           for (const [name, marble] of Object.entries(playerBallLookup)) {
@@ -765,14 +833,15 @@ socket.on('updateName', (data, playernum) => {
       
 
     // ************** determine if there is a winner **************************
-      if (ghf && rhf) {
+      if (isMarble && ghf && rhf) {
         let winner = 'gr'
         socket.emit('winner', winner)
       }
-      if (yhf && bhf) {
+      if (isMarble && yhf && bhf) {
           let winner = 'yb'
           socket.emit('winner', winner)
       }
+      if (isMarble) homeOccupancyCache = null
 
     });
 
@@ -802,19 +871,20 @@ socket.on('updateName', (data, playernum) => {
       this.children.bringToTop(this.gameObject)
       this.gameObject.x = groupObj.x
       this.gameObject.y = groupObj.y
+      updateHomeOccupancy(this.gameObject)
     }
     
     let yellowBlueMarbles = (obj, playersmarble) => {
       //console.log('yellowBlue Marble FUNCTION: ', obj.frame.name, playersmarble.frame.name)
 
-      const bhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], RightHome)
-      const bhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], RightHome)
-      const bhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome)
-      const bhfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], RightHome)
-      const yhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], LeftHome)
-      const yhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], LeftHome)
-      const yhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], LeftHome)
-      const yhfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome)
+      const bhfWithBlue = homeHasMarble(RightHome, blueMarbles)
+      const bhfWithYellow = homeHasMarble(RightHome, yellowMarbles)
+      const bhfWithRed = homeHasMarble(RightHome, redMarbles)
+      const bhfWithGreen = homeHasMarble(RightHome, greenMarbles)
+      const yhfWithBlue = homeHasMarble(LeftHome, blueMarbles)
+      const yhfWithYellow = homeHasMarble(LeftHome, yellowMarbles)
+      const yhfWithRed = homeHasMarble(LeftHome, redMarbles)
+      const yhfWithGreen = homeHasMarble(LeftHome, greenMarbles)
 
       if (obj.frame.name === playersmarble.frame.name) {
          objdragStart(obj)
@@ -844,24 +914,24 @@ socket.on('updateName', (data, playernum) => {
                                     objdragStart(obj)
             } else if (obj.frame.name === 'y' && playersmarble.frame.name === 'b') {
                                         if (bhfWithYellow) {
-                                            this.physics.world.overlap([l1, l2, l3, l4, l5], RightHome, move_partners_Marble)
-                                            this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome, move_opponets_Marble)
-                                            this.physics.world.overlap([b1, b2, b3, b4, b5], LeftHome, move_opponets_Marble)
+                                          this.physics.world.overlap(yellowMarbles, RightHome, move_partners_Marble)
+                                          this.physics.world.overlap(greenMarbles, LeftHome, move_opponets_Marble)
+                                          this.physics.world.overlap(redMarbles, LeftHome, move_opponets_Marble)
                                         }   else if (bhfWithRed) {
-                                             this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome, move_opponets_Marble)
+                                             this.physics.world.overlap(redMarbles, RightHome, move_opponets_Marble)
                                         }   else if (bhfWithGreen) {
-                                             this.physics.world.overlap([t1, t2, t3, t4, t5], RightHome, move_opponets_Marble)
+                                             this.physics.world.overlap(greenMarbles, RightHome, move_opponets_Marble)
                                         }
                                         playerHome(playersmarble, obj)
             } else if (obj.frame.name === 'b' && playersmarble.frame.name === 'y') {
                                             if (yhfWithBlue) {
-                                                this.physics.world.overlap([r1, r2, r3, r4, r5], LeftHome, move_partners_Marble)
-                                                this.physics.world.overlap([b1, b2, b3, b4, b5], RightHome, move_opponets_Marble)
-                                                this.physics.world.overlap([t1, t2, t3, t4, t5], RightHome, move_opponets_Marble)
+                                                this.physics.world.overlap(blueMarbles, LeftHome, move_partners_Marble)
+                                                this.physics.world.overlap(redMarbles, RightHome, move_opponets_Marble)
+                                                this.physics.world.overlap(greenMarbles, RightHome, move_opponets_Marble)
                                             } else if (yhfWithRed) {
-                                                this.physics.world.overlap([b1, b2, b3, b4, b5], LeftHome, move_opponets_Marble)
+                                                this.physics.world.overlap(redMarbles, LeftHome, move_opponets_Marble)
                                             } else if (yhfWithGreen) {
-                                                this.physics.world.overlap([t1, t2, t3, t4, t5], LeftHome, move_opponets_Marble)
+                                                this.physics.world.overlap(greenMarbles, LeftHome, move_opponets_Marble)
                                             }
                                             playerHome(playersmarble, obj)
             } else if ((obj.frame.name === 'g' || obj.frame.name === 'r') && (playersmarble.frame.name === 'b' || playersmarble.frame.name === 'y')) {
@@ -872,14 +942,14 @@ socket.on('updateName', (data, playernum) => {
     let greenRedMarbles = (obj, playersmarble) => {
      // console.log('yellowBlue Marble FUNCTION: ', obj.frame.name, playersmarble.frame.name)
 
-      const rhfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], BottomHome)
-      const rhfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], BottomHome)
-      const rhfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], BottomHome)
-      const rhfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], BottomHome)
-      const ghfWithBlue = this.physics.world.overlap([r1, r2, r3, r4, r5], TopHome)
-      const ghfWithYellow = this.physics.world.overlap([l1, l2, l3, l4, l5], TopHome)
-      const ghfWithRed = this.physics.world.overlap([b1, b2, b3, b4, b5], TopHome)
-      const ghfWithGreen = this.physics.world.overlap([t1, t2, t3, t4, t5], TopHome)
+      const rhfWithBlue = homeHasMarble(BottomHome, blueMarbles)
+      const rhfWithYellow = homeHasMarble(BottomHome, yellowMarbles)
+      const rhfWithRed = homeHasMarble(BottomHome, redMarbles)
+      const rhfWithGreen = homeHasMarble(BottomHome, greenMarbles)
+      const ghfWithBlue = homeHasMarble(TopHome, blueMarbles)
+      const ghfWithYellow = homeHasMarble(TopHome, yellowMarbles)
+      const ghfWithRed = homeHasMarble(TopHome, redMarbles)
+      const ghfWithGreen = homeHasMarble(TopHome, greenMarbles)
 
       if (obj.frame.name === playersmarble.frame.name) {
                 objdragStart(obj)
@@ -911,24 +981,24 @@ socket.on('updateName', (data, playernum) => {
                         // Check to see if red home is occupied, if so move marble
                         if (ghfWithRed) {
                             // console.log('gh occupied with red marble')
-                            this.physics.world.overlap([b1, b2, b3, b4, b5], TopHome, move_partners_Marble)
-                            this.physics.world.overlap([r1, r2, r3, r4, r5], BottomHome, move_opponets_Marble)
-                            this.physics.world.overlap([l1, l2, l3, l4, l5], BottomHome, move_opponets_Marble)
+                            this.physics.world.overlap(redMarbles, TopHome, move_partners_Marble)
+                            this.physics.world.overlap(blueMarbles, BottomHome, move_opponets_Marble)
+                            this.physics.world.overlap(yellowMarbles, BottomHome, move_opponets_Marble)
                         } else if (ghfWithBlue) {
-                            this.physics.world.overlap([r1, r2, r3, r4, r5], TopHome, move_opponets_Marble)
+                            this.physics.world.overlap(blueMarbles, TopHome, move_opponets_Marble)
                         } else if (ghfWithYellow) {
-                            this.physics.world.overlap([l1, l2, l3, l4, l5], TopHome, move_opponets_Marble)
+                            this.physics.world.overlap(yellowMarbles, TopHome, move_opponets_Marble)
                         }
                         playerHome(playersmarble, obj)
             } else if (obj.frame.name === 'g' && playersmarble.frame.name === 'r') {
                             if (rhfWithGreen) {
-                                this.physics.world.overlap([t1, t2, t3, t4, t5], BottomHome, move_partners_Marble)
-                                this.physics.world.overlap([r1, r2, r3, r4, r5], TopHome, move_opponets_Marble)
-                                this.physics.world.overlap([l1, l2, l3, l4, l5], TopHome, move_opponets_Marble)
+                                this.physics.world.overlap(greenMarbles, BottomHome, move_partners_Marble)
+                                this.physics.world.overlap(blueMarbles, TopHome, move_opponets_Marble)
+                                this.physics.world.overlap(yellowMarbles, TopHome, move_opponets_Marble)
                             } else if (rhfWithBlue) {
-                                this.physics.world.overlap([r1, r2, r3, r4, r5], BottomHome, move_opponets_Marble)
+                                this.physics.world.overlap(blueMarbles, BottomHome, move_opponets_Marble)
                             } else if (rhfWithYellow) {
-                                this.physics.world.overlap([l1, l2, l3, l4, l5], BottomHome, move_opponets_Marble)
+                                this.physics.world.overlap(yellowMarbles, BottomHome, move_opponets_Marble)
                             }
                             playerHome(playersmarble, obj)
             } else if ((obj.frame.name === 'b' || obj.frame.name === 'y') && (playersmarble.frame.name === 'g' || playersmarble.frame.name === 'r')) {
@@ -941,16 +1011,19 @@ socket.on('updateName', (data, playernum) => {
     function objdragStart(obj) {
         obj.x = obj.input.dragStartX
         obj.y = obj.input.dragStartY
+          updateHomeOccupancy(obj)
       }
 
     function move_partners_Marble(item) {
         item.x = item.getData('homeX')
         item.y = item.getData('homeY')
+          updateHomeOccupancy(item)
     }
 
     function move_opponets_Marble(item) {
         item.x = item.getData('X')
         item.y = item.getData('Y')
+          updateHomeOccupancy(item)
     }
 
 
@@ -959,6 +1032,8 @@ socket.on('updateName', (data, playernum) => {
         obj.y = pos.y
         pos.x = pos.getData('X')
         pos.y = pos.getData('Y')
+        updateHomeOccupancy(obj)
+        updateHomeOccupancy(pos)
     }
 
     function playerHome(pos, obj) {
@@ -966,6 +1041,8 @@ socket.on('updateName', (data, playernum) => {
         obj.y = pos.y
         pos.x = pos.getData('homeX')
         pos.y = pos.getData('homeY')
+        updateHomeOccupancy(obj)
+        updateHomeOccupancy(pos)
     }
 
     let playersturn = (obj, greenfull, yellowfull, redfull, bluefull) => {
@@ -1027,18 +1104,9 @@ socket.on('updateName', (data, playernum) => {
    }
 
     //** Checks to see if home area is full of not */
-   let homefull = (x1, x2, x3, x4, x5, Home) => {
-      let p1 = this.physics.world.overlap(x1, Home)
-      let p2 = this.physics.world.overlap(x2, Home)
-      let p3 = this.physics.world.overlap(x3, Home)
-      let p4 = this.physics.world.overlap(x4, Home)
-      let p5 = this.physics.world.overlap(x5, Home)
-      // console.log('homefull check',p1,p2,p3,p4,p5)
-      if (p1 && p2 && p3 && p4 && p5) {
-          return true
-      } else {
-          return false
-      }
+   let homefull = (marbles, Home) => {
+      const occupants = getHomeOccupants(Home)
+      return marbles.every((marble) => occupants.has(marble))
   }
 //---------------------------------------------
  // -- webRTC function

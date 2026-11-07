@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 import { createHands, isAlphanumeric, shuffle } from "../src/helpers/gameutils.js";
 import { RoomGameStore } from "../src/helpers/serverstate.js";
-import { getNearestBoardHole } from "../src/helpers/boardholes.js";
+import boardHole, { getNearestBoardHole } from "../src/helpers/boardholes.js";
 import {
   BoundedIceCandidateQueue,
   SerializedOperations,
@@ -156,6 +156,68 @@ test("getNearestBoardHole returns the exact center of the nearest hole", () => {
 
   assert.deepEqual(getNearestBoardHole(gameBoard, 368, 101), { x: 370, y: 100 });
   assert.equal(getNearestBoardHole(gameBoard, 5, 5), null);
+});
+
+test("board holes and home targets use static circular physics bodies", () => {
+  const groups = [];
+  const scene = {
+    physics: {
+      add: {
+        staticGroup() {
+          const children = [];
+          const group = {
+            create(x, y, texture, frame) {
+              const hole = {
+                x,
+                y,
+                texture,
+                frame,
+                body: {
+                  setCircle(radius, offsetX, offsetY) {
+                    Object.assign(this, {
+                      isCircle: true,
+                      radius,
+                      offsetX,
+                      offsetY
+                    });
+                  },
+                  reset() {
+                    this.resetCount = (this.resetCount || 0) + 1;
+                  }
+                }
+              };
+              children.push(hole);
+              return hole;
+            },
+            getChildren: () => children
+          };
+          groups.push(group);
+          return group;
+        }
+      }
+    }
+  };
+
+  const board = boardHole(scene);
+  const targets = [
+    board.gameBoard,
+    board.topHome,
+    board.rightHome,
+    board.bottomHome,
+    board.leftHome
+  ];
+
+  assert.equal(groups.length, 5);
+  assert.deepEqual(targets.map((group) => group.getChildren().length), [92, 5, 5, 5, 5]);
+  for (const hole of targets.flatMap((group) => group.getChildren())) {
+    assert.equal(hole.body.isCircle, true);
+    assert.equal(hole.body.radius, 12);
+    assert.equal(hole.body.offsetX, 4);
+    assert.equal(hole.body.offsetY, 4);
+    assert.equal(hole.body.resetCount, 1);
+  }
+  assert.deepEqual([board.TopHome.x, board.TopHome.y, board.TopHome.frame], [170, 50, "h1"]);
+  assert.deepEqual([board.TopHome.side, board.TopHome.type], ["top", "home"]);
 });
 
 test("isAlphanumeric preserves the room and username validation contract", () => {

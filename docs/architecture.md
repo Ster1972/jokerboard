@@ -74,11 +74,11 @@ The browser records periodic WebRTC connection statistics at `window.__jokerWebR
 
 ## Client structure
 
-`game.js` creates the board holes, four marble groups of five, cards, player-name DOM controls, modals, drop zone, and 1490x825 Phaser scene. Collision helpers are spread across:
+`game.js` creates the board holes, four marble groups of five, cards, player-name DOM controls, modals, drop zone, and 1490x825 Phaser scene. Board and marble behavior is handled across:
 
 - `boardholes.js`: board-hole objects and nearest-hole lookup
 - `playerballs.js`: player marble creation and metadata
-- `marbles.js`: additional board/marble behavior
+- `game.js`: marble collision and home-entry behavior
 - `cards.js`: card image rendering
 - `zone.js`: card drop zone
 - `modal.js`: in-game modal

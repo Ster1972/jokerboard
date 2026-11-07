@@ -20,9 +20,16 @@ export function getNearestBoardHole(gameBoard, x, y, maxDistance = 25) {
     return { x: nearestHole.x, y: nearestHole.y };
 }
 
+function createHole(group, x, y, texture, frame) {
+    const hole = group.create(x, y, texture, frame);
+    hole.body.setCircle(12, 4, 4);
+    hole.body.reset();
+    return hole;
+}
+
 export default function boardHole(scene){
     
-    const gameBoard = scene.physics.add.group({ immovable: true }) //Creat group for gameBoard
+    const gameBoard = scene.physics.add.staticGroup() //Creat group for gameBoard
 
     // Helper to tag holes with metadata for collision detection and game logic
     function tag(hole, side, type) {
@@ -31,146 +38,146 @@ export default function boardHole(scene){
         return hole;
     }
 
-    gameBoard.create(50, 90, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 72
-    gameBoard.create(50, 130, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 170, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 210, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 250, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 290, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 330, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 370, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 410, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 450, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 490, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 62 - LEFT Exit
-    gameBoard.create(50, 530, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 570, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 610, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 50, 90, 'sphere', 'h1') // Hole 72
+    createHole(gameBoard, 50, 130, 'sphere', 'h2')
+    createHole(gameBoard, 50, 170, 'sphere', 'h1')
+    createHole(gameBoard, 50, 210, 'sphere', 'h2')
+    createHole(gameBoard, 50, 250, 'sphere', 'h1')
+    createHole(gameBoard, 50, 290, 'sphere', 'h2')
+    createHole(gameBoard, 50, 330, 'sphere', 'h1')
+    createHole(gameBoard, 50, 370, 'sphere', 'h2')
+    createHole(gameBoard, 50, 410, 'sphere', 'h1')
+    createHole(gameBoard, 50, 450, 'sphere', 'h2')
+    createHole(gameBoard, 50, 490, 'sphere', 'h1') // Hole 62 - LEFT Exit
+    createHole(gameBoard, 50, 530, 'sphere', 'h2')
+    createHole(gameBoard, 50, 570, 'sphere', 'h1')
+    createHole(gameBoard, 50, 610, 'sphere', 'h2')
     // ----
-    let LeftHome = gameBoard.create(50, 650, 'sphere', 'h1').refreshBody().setCircle(12, 4, 4) // Hole 58 - LEFT Home Area
+    let LeftHome = createHole(gameBoard, 50, 650, 'sphere', 'h1') // Hole 58 - LEFT Home Area
     // // ----
-    gameBoard.create(50, 690, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 730, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4) //Hole 55 - Bottom left corner
-    gameBoard.create(90, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(130, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(170, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(210, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(250, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(290, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(330, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(370, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(410, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(450, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(490, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 44 - BOTTOM Exit
-    gameBoard.create(530, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(570, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(610, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 50, 690, 'sphere', 'h2')
+    createHole(gameBoard, 50, 730, 'sphere', 'h1')
+    createHole(gameBoard, 50, 770, 'sphere', 'h2') //Hole 55 - Bottom left corner
+    createHole(gameBoard, 90, 770, 'sphere', 'h1')
+    createHole(gameBoard, 130, 770, 'sphere', 'h2')
+    createHole(gameBoard, 170, 770, 'sphere', 'h1')
+    createHole(gameBoard, 210, 770, 'sphere', 'h2')
+    createHole(gameBoard, 250, 770, 'sphere', 'h1')
+    createHole(gameBoard, 290, 770, 'sphere', 'h2')
+    createHole(gameBoard, 330, 770, 'sphere', 'h1')
+    createHole(gameBoard, 370, 770, 'sphere', 'h2')
+    createHole(gameBoard, 410, 770, 'sphere', 'h1')
+    createHole(gameBoard, 450, 770, 'sphere', 'h2')
+    createHole(gameBoard, 490, 770, 'sphere', 'h1') // Hole 44 - BOTTOM Exit
+    createHole(gameBoard, 530, 770, 'sphere', 'h2')
+    createHole(gameBoard, 570, 770, 'sphere', 'h1')
+    createHole(gameBoard, 610, 770, 'sphere', 'h2')
     // ----
-    let BottomHome = gameBoard.create(650, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 40 - BOTTOM Home Area
+    let BottomHome = createHole(gameBoard, 650, 770, 'sphere', 'h1') // Hole 40 - BOTTOM Home Area
     // ----
-    gameBoard.create(690, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(730, 770, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 770, 'sphere', 'h2').refreshBody().setCircle(12,4,4) // Hole 37 - Bottom right cornet
-    gameBoard.create(770, 730, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 690, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 650, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 610, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 570, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 530, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 490, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 450, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 410, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 370, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 330, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 26 - RIGHT Exit 
-    gameBoard.create(770, 290, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 250, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 210, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 690, 770, 'sphere', 'h2')
+    createHole(gameBoard, 730, 770, 'sphere', 'h1')
+    createHole(gameBoard, 770, 770, 'sphere', 'h2') // Hole 37 - Bottom right cornet
+    createHole(gameBoard, 770, 730, 'sphere', 'h1')
+    createHole(gameBoard, 770, 690, 'sphere', 'h2')
+    createHole(gameBoard, 770, 650, 'sphere', 'h1')
+    createHole(gameBoard, 770, 610, 'sphere', 'h2')
+    createHole(gameBoard, 770, 570, 'sphere', 'h1')
+    createHole(gameBoard, 770, 530, 'sphere', 'h2')
+    createHole(gameBoard, 770, 490, 'sphere', 'h1')
+    createHole(gameBoard, 770, 450, 'sphere', 'h2')
+    createHole(gameBoard, 770, 410, 'sphere', 'h1')
+    createHole(gameBoard, 770, 370, 'sphere', 'h2')
+    createHole(gameBoard, 770, 330, 'sphere', 'h1') // Hole 26 - RIGHT Exit
+    createHole(gameBoard, 770, 290, 'sphere', 'h2')
+    createHole(gameBoard, 770, 250, 'sphere', 'h1')
+    createHole(gameBoard, 770, 210, 'sphere', 'h2')
     // ----
-    let RightHome = gameBoard.create(770, 170, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 22 - RIGHT Home Area
+    let RightHome = createHole(gameBoard, 770, 170, 'sphere', 'h1') // Hole 22 - RIGHT Home Area
     // ----
-    gameBoard.create(770, 130, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 90, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(770, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4) // Hole 19 - Top right corner
-    gameBoard.create(730, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(690, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(650, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(610, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(570, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(530, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(490, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(450, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(410, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(370, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(330, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4) //Hole 8 - Top Exit
-    gameBoard.create(290, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(250, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(210, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 770, 130, 'sphere', 'h2')
+    createHole(gameBoard, 770, 90, 'sphere', 'h1')
+    createHole(gameBoard, 770, 50, 'sphere', 'h2') // Hole 19 - Top right corner
+    createHole(gameBoard, 730, 50, 'sphere', 'h1')
+    createHole(gameBoard, 690, 50, 'sphere', 'h2')
+    createHole(gameBoard, 650, 50, 'sphere', 'h1')
+    createHole(gameBoard, 610, 50, 'sphere', 'h2')
+    createHole(gameBoard, 570, 50, 'sphere', 'h1')
+    createHole(gameBoard, 530, 50, 'sphere', 'h2')
+    createHole(gameBoard, 490, 50, 'sphere', 'h1')
+    createHole(gameBoard, 450, 50, 'sphere', 'h2')
+    createHole(gameBoard, 410, 50, 'sphere', 'h1')
+    createHole(gameBoard, 370, 50, 'sphere', 'h2')
+    createHole(gameBoard, 330, 50, 'sphere', 'h1') //Hole 8 - Top Exit
+    createHole(gameBoard, 290, 50, 'sphere', 'h2')
+    createHole(gameBoard, 250, 50, 'sphere', 'h1')
+    createHole(gameBoard, 210, 50, 'sphere', 'h2')
     // ----
-    let TopHome = gameBoard.create(170, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4) // Hole 4 - Top Home Area
+    let TopHome = createHole(gameBoard, 170, 50, 'sphere', 'h1') // Hole 4 - Top Home Area
     // ----
-    gameBoard.create(130, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4)
-    gameBoard.create(90, 50, 'sphere', 'h1').refreshBody().setCircle(12,4,4)
-    gameBoard.create(50, 50, 'sphere', 'h2').refreshBody().setCircle(12,4,4) //Hole 1 - Top Left corner
+    createHole(gameBoard, 130, 50, 'sphere', 'h2')
+    createHole(gameBoard, 90, 50, 'sphere', 'h1')
+    createHole(gameBoard, 50, 50, 'sphere', 'h2') //Hole 1 - Top Left corner
 
 //-------------------Game Board PLayers Home Areas -------------------------
     // Top Area
-    gameBoard.create(370, 100, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(370, 140, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(370, 180, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(330, 140, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(410, 140, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 370, 100, 'sphere', 'home')
+    createHole(gameBoard, 370, 140, 'sphere', 'home')
+    createHole(gameBoard, 370, 180, 'sphere', 'home')
+    createHole(gameBoard, 330, 140, 'sphere', 'home')
+    createHole(gameBoard, 410, 140, 'sphere', 'home')
     // Right Area
-    gameBoard.create(710, 370, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(670, 370, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(630, 370, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(670, 330, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(670, 410, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 710, 370, 'sphere', 'home')
+    createHole(gameBoard, 670, 370, 'sphere', 'home')
+    createHole(gameBoard, 630, 370, 'sphere', 'home')
+    createHole(gameBoard, 670, 330, 'sphere', 'home')
+    createHole(gameBoard, 670, 410, 'sphere', 'home')
     // Bottom Area
-    gameBoard.create(450, 720, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(450, 680, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(450, 640, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(490, 680, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(410, 680, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 450, 720, 'sphere', 'home')
+    createHole(gameBoard, 450, 680, 'sphere', 'home')
+    createHole(gameBoard, 450, 640, 'sphere', 'home')
+    createHole(gameBoard, 490, 680, 'sphere', 'home')
+    createHole(gameBoard, 410, 680, 'sphere', 'home')
     // Left Area
-    gameBoard.create(100, 450, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(140, 450, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(180, 450, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(140, 490, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    gameBoard.create(140, 410, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    createHole(gameBoard, 100, 450, 'sphere', 'home')
+    createHole(gameBoard, 140, 450, 'sphere', 'home')
+    createHole(gameBoard, 180, 450, 'sphere', 'home')
+    createHole(gameBoard, 140, 490, 'sphere', 'home')
+    createHole(gameBoard, 140, 410, 'sphere', 'home')
 
 
 //-------------------Game Board Home Areas -------------------------
     //---Top Area
-    const topHome = scene.physics.add.group()
-    topHome.create(170, 100, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    topHome.create(170, 140, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    topHome.create(170, 180, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    topHome.create(210, 180, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    topHome.create(250, 180, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    const topHome = scene.physics.add.staticGroup()
+    createHole(topHome, 170, 100, 'sphere', 'home')
+    createHole(topHome, 170, 140, 'sphere', 'home')
+    createHole(topHome, 170, 180, 'sphere', 'home')
+    createHole(topHome, 210, 180, 'sphere', 'home')
+    createHole(topHome, 250, 180, 'sphere', 'home')
 
     // Right Area
-    const rightHome = scene.physics.add.group()
-    rightHome.create(720, 170, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    rightHome.create(680, 170, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    rightHome.create(640, 170, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    rightHome.create(640, 210, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    rightHome.create(640, 250, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    const rightHome = scene.physics.add.staticGroup()
+    createHole(rightHome, 720, 170, 'sphere', 'home')
+    createHole(rightHome, 680, 170, 'sphere', 'home')
+    createHole(rightHome, 640, 170, 'sphere', 'home')
+    createHole(rightHome, 640, 210, 'sphere', 'home')
+    createHole(rightHome, 640, 250, 'sphere', 'home')
 
     // Bottom Area
-    const bottomHome = scene.physics.add.group()
-    bottomHome.create(650, 720, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    bottomHome.create(650, 680, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    bottomHome.create(650, 640, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    bottomHome.create(610, 640, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    bottomHome.create(570, 640, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    const bottomHome = scene.physics.add.staticGroup()
+    createHole(bottomHome, 650, 720, 'sphere', 'home')
+    createHole(bottomHome, 650, 680, 'sphere', 'home')
+    createHole(bottomHome, 650, 640, 'sphere', 'home')
+    createHole(bottomHome, 610, 640, 'sphere', 'home')
+    createHole(bottomHome, 570, 640, 'sphere', 'home')
 
     // Left Area
-    const leftHome = scene.physics.add.group()
-    leftHome.create(100, 650, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    leftHome.create(140, 650, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    leftHome.create(180, 650, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    leftHome.create(180, 610, 'sphere', 'home').refreshBody().setCircle(12,4,4)
-    leftHome.create(180, 570, 'sphere', 'home').refreshBody().setCircle(12,4,4)
+    const leftHome = scene.physics.add.staticGroup()
+    createHole(leftHome, 100, 650, 'sphere', 'home')
+    createHole(leftHome, 140, 650, 'sphere', 'home')
+    createHole(leftHome, 180, 650, 'sphere', 'home')
+    createHole(leftHome, 180, 610, 'sphere', 'home')
+    createHole(leftHome, 180, 570, 'sphere', 'home')
 
     // --------- ADD METADATA TO KEY HOLES FOR GAME LOGIC ---------
     // Tag the four main entry holes on the track
