@@ -259,7 +259,19 @@ io.on("connection", (socket) => {
        } else {
           io.to(roomName).emit('startNewGame')  // clear cards from board
           const {hand1, hand2, hand3, hand4, gameDeck, cardsplayed} = createHands()
-          store.setCardState({roomName, hand1, hand2, hand3, hand4, gameDeck, cardsplayed})
+          store.setCardState({
+            roomName,
+            hand1,
+            hand2,
+            hand3,
+            hand4,
+            gameDeck,
+            cardsplayed,
+            activePlayer: 1,
+            pendingCardPlayer: null,
+            authoritative: true,
+            seenActions: []
+          })
 
            const handsByPlayer = {1: hand1, 2: hand2, 3: hand3, 4: hand4};
            for (const guest of guests) {

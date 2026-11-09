@@ -139,14 +139,33 @@ export class RoomGameStore {
   }
 
   setCardState(state) {
-    state.lastCardPlayed = "";
+    const normalizedState = {
+      ...state,
+      lastCardPlayed: typeof state.lastCardPlayed === "string" ? state.lastCardPlayed : "",
+      activePlayer: Number.isInteger(state.activePlayer) ? Number(state.activePlayer) : 1,
+      pendingCardPlayer: Number.isInteger(state.pendingCardPlayer) ? Number(state.pendingCardPlayer) : null,
+      authoritative: Boolean(state.authoritative),
+      seenActions: Array.isArray(state.seenActions) ? [...state.seenActions] : []
+    };
+
+    if (!Number.isInteger(normalizedState.activePlayer) || normalizedState.activePlayer < 1 || normalizedState.activePlayer > 4) {
+      normalizedState.activePlayer = 1;
+    }
+    if (normalizedState.pendingCardPlayer !== null &&
+      (!Number.isInteger(normalizedState.pendingCardPlayer) ||
+        normalizedState.pendingCardPlayer < 1 ||
+        normalizedState.pendingCardPlayer > 4)) {
+      normalizedState.pendingCardPlayer = null;
+    }
+
     const index = this.cardStates.findIndex((item) => item.roomName === state.roomName);
 
     if (index !== -1) {
       this.cardStates.splice(index, 1);
     }
 
-    this.cardStates.push(state);
+    this.cardStates.push(normalizedState);
+    return normalizedState;
   }
 
   removeCardState(roomName) {
@@ -158,18 +177,25 @@ export class RoomGameStore {
     const cardState = this.getCardState(roomName);
     if (!cardState || !Number.isInteger(pos) || pos < 0) return null;
 
+    const boardNum = Number(board);
+    const shouldEnforceTurn = cardState.authoritative === true &&
+      Number.isInteger(cardState.activePlayer);
+    if (shouldEnforceTurn && boardNum !== cardState.activePlayer) return null;
+    if (shouldEnforceTurn && cardState.pendingCardPlayer !== null) return null;
+
     const handByPlayer = {
       1: cardState.hand1,
       2: cardState.hand2,
       3: cardState.hand3,
       4: cardState.hand4
     };
-    const hand = handByPlayer[board];
+    const hand = handByPlayer[boardNum];
     if (!hand || pos >= hand.length) return null;
     if (hand[pos] !== gameObj) return null;
 
     cardState.cardsplayed.push(gameObj);
     cardState.lastCardPlayed = gameObj;
+    cardState.pendingCardPlayer = boardNum;
 
     if (cardState.gameDeck.length === 0 && cardState.cardsplayed.length > 0) {
       shuffle(cardState.cardsplayed);
@@ -182,5 +208,37 @@ export class RoomGameStore {
 
     hand.splice(pos, 1, newCard);
     return newCard;
+  }
+
+  completeMarbleAction(roomName, playerNum, actionId, changes) {
+    const cardState = this.getCardState(roomName);
+    if (!cardState) return null;
+
+    const playerIndex = Number(playerNum);
+    if (!Number.isInteger(playerIndex) || playerIndex < 1 || playerIndex > 4) return null;
+    if (typeof actionId !== "string" || actionId.length === 0 || actionId.length > 128) return null;
+
+    const shouldEnforceTurn = cardState.authoritative === true &&
+      Number.isInteger(cardState.activePlayer);
+    if (shouldEnforceTurn) {
+      if (playerIndex !== cardState.activePlayer) return null;
+      if (cardState.pendingCardPlayer !== playerIndex) return null;
+    }
+
+    const actionKey = `${playerIndex}:${actionId}`;
+    const seenActions = Array.isArray(cardState.seenActions) ? cardState.seenActions : [];
+    if (seenActions.includes(actionKey)) return null;
+
+    seenActions.push(actionKey);
+    cardState.seenActions = seenActions;
+    cardState.lastActionId = actionId;
+    cardState.pendingCardPlayer = null;
+    cardState.activePlayer = playerIndex === 4 ? 1 : playerIndex + 1;
+
+    if (Array.isArray(changes)) {
+      cardState.lastActionChanges = changes;
+    }
+
+    return cardState;
   }
 }
