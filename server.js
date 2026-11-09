@@ -210,7 +210,13 @@ io.on("connection", (socket) => {
       lastcard = cardState.lastCardPlayed ?? "";
     }
     //console.log('filtered game status', socket.id)
-    io.to(socket.id).emit("updateGameState", gamestatusupdate, hand, lastcard);
+    io.to(socket.id).emit(
+      "updateGameState",
+      gamestatusupdate,
+      hand,
+      lastcard,
+      cardState?.activePlayer ?? null
+    );
     io.to(roomName).emit("connectToRoom", store.getUsersInRoom(roomName));
     
     socket.on("objMoveData", (obj) => {
@@ -272,6 +278,7 @@ io.on("connection", (socket) => {
             authoritative: true,
             seenActions: []
           })
+          io.in(roomName).emit("activePlayer", 1);
 
            const handsByPlayer = {1: hand1, 2: hand2, 3: hand3, 4: hand4};
            for (const guest of guests) {
@@ -283,24 +290,32 @@ io.on("connection", (socket) => {
         
   })
 
-  socket.on('cardPlayedclient', function (gameObj, board, pos, actionId) {
-    if (typeof gameObj !== "string" || gameObj.length > 8 || !Number.isInteger(pos) || pos < 0 || pos >= 6) return;
+  socket.on('cardPlayedclient', function (gameObj, board, pos, acknowledge) {
+    const reject = (reason) => {
+      if (typeof acknowledge === "function") acknowledge({ accepted: false, reason });
+    };
+    if (typeof gameObj !== "string" || gameObj.length > 8 || !Number.isInteger(pos) || pos < 0 || pos >= 6) {
+      reject("invalid");
+      return;
+    }
     const member = store.getUserById(socket.id);
-    if (!member || String(member.playernum) !== String(board)) return;
+    if (!member || String(member.playernum) !== String(board)) {
+      reject("invalid");
+      return;
+    }
     const newCard = store.playCard(roomName, gameObj, board, pos);
-    if (newCard !== null) {
+    if (newCard === null) {
       const cardState = store.getCardState(roomName);
-      const pendingActionId = typeof actionId === "string" && actionId.length > 0
-        ? actionId
-        : (cardState && cardState.pendingActionId ? cardState.pendingActionId : null);
-      if (pendingActionId) {
-        const roomState = store.getCardState(roomName);
-        if (roomState) roomState.pendingActionId = pendingActionId;
-      }
-      io.in(roomName).emit('cardPlayed', gameObj)
-      io.to(socket.id).emit('newcard', newCard, pos)
-      if (pendingActionId) io.to(socket.id).emit('cardActionId', pendingActionId)
-  } // end of roomcarddata !== -1
+      reject(cardState?.activePlayer !== Number(member.playernum) ? "turn" : "invalid");
+      return;
+    }
+    const cardState = store.getCardState(roomName);
+    io.in(roomName).emit('cardPlayed', gameObj)
+    io.to(socket.id).emit('newcard', newCard, pos)
+    if (cardState?.pendingActionId) {
+      io.to(socket.id).emit('cardActionId', cardState.pendingActionId)
+    }
+    if (typeof acknowledge === "function") acknowledge({ accepted: true });
    // console.log('show game deck -- end', hand1, hand2)
     
 })
@@ -333,7 +348,15 @@ io.on("connection", (socket) => {
       ? gamestatus.actionId
       : (cardState && cardState.pendingCardPlayer === playerNum ? cardState.pendingActionId : null);
     if (pendingActionId && cardState && cardState.pendingCardPlayer === playerNum) {
-      store.completeMarbleAction(member.gameName, playerNum, pendingActionId, changes);
+      const completedAction = store.completeMarbleAction(
+        member.gameName,
+        playerNum,
+        pendingActionId,
+        changes
+      );
+      if (completedAction) {
+        io.in(member.gameName).emit("activePlayer", completedAction.activePlayer);
+      }
     }
 
     const turn = typeof gamestatus.turn === "string" ? gamestatus.turn.slice(0, 120) : "";

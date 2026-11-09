@@ -84,6 +84,7 @@ export default class Game extends Phaser.Scene {
     let userName = sessionStorage.getItem("userName");
     let roomName = sessionStorage.getItem("roomName");
     let playerNum = ''
+    let serverActivePlayer = null
     let playershand = []
     let cards_in_dropZone = []
     let newcardplayed = false
@@ -470,6 +471,16 @@ socket.on('updateName', (data, playernum) => {
 
     this.colorsturn = this.add.text(1025, 190, '', { color: 'white', fontSize: 'bold 30px', align: 'center' }).setOrigin(0.5)
 
+    const showActivePlayer = (value) => {
+      const activePlayer = Number(value);
+      if (!Number.isInteger(activePlayer) || activePlayer < 1 || activePlayer > 4) return;
+
+      serverActivePlayer = activePlayer;
+      this.colorsturn.text = Number(playerNum || sessionStorage.getItem("playerNum")) === activePlayer
+        ? "It's your turn"
+        : `Player ${activePlayer}'s turn`;
+    };
+
 
     
     
@@ -590,9 +601,12 @@ socket.on('updateName', (data, playernum) => {
     })
 
     socket.on('colourturn', (data) => {
-      this.colorsturn.text = data
+      if (serverActivePlayer === null) this.colorsturn.text = data
+      else showActivePlayer(serverActivePlayer);
       //console.log('color text data', this.colorsturn.text)
    })
+
+    socket.on('activePlayer', showActivePlayer)
 
     socket.on("moveObject", (obj) => {
       this.gameObject = playerBallLookup[obj.name];
@@ -612,7 +626,10 @@ socket.on('updateName', (data, playernum) => {
         marble.y = change.y;
         marbleSnapshotBaseline.set(change.name, { x: change.x, y: change.y });
       }
-      if (typeof delta.turn === "string") this.colorsturn.text = delta.turn;
+      if (typeof delta.turn === "string") {
+        if (serverActivePlayer === null) this.colorsturn.text = delta.turn;
+        else showActivePlayer(serverActivePlayer);
+      }
       if (typeof delta.reset === "boolean") this.resetGame.setVisible(delta.reset);
     });
 
@@ -628,6 +645,8 @@ socket.on('updateName', (data, playernum) => {
 
     // cardPlayed - shows the card being played by the other player(s)
     socket.on('cardPlayed', (gameObj) => {
+      for (const card of cards_in_dropZone) card.destroy();
+      cards_in_dropZone = [];
       newcardplayed = true
       let playerCard = new Card(this);
       let obj = playerCard.render(1025, 375, 'cards', gameObj)
@@ -677,11 +696,10 @@ socket.on('updateName', (data, playernum) => {
     let obj = card.render(900 + (pos * 50), 680, 'cards', newcard)
     obj.setDepth(pos)
     obj.name = newcard
-    playershand.splice(pos, 1)  // remove image from array
-    playershand.splice(pos, 0, obj)  // place image into array at the same position
+    playershand.splice(pos, 0, obj)
  })
 
-    socket.on('updateGameState', (data, cardhand, lastcardplayed) => {
+    socket.on('updateGameState', (data, cardhand, lastcardplayed, activePlayer) => {
      //console.log('game update recieved::::: ----->', cardhand, lastcardplayed )
       for (const card of playershand) card.destroy();
       for (const card of cards_in_dropZone) card.destroy();
@@ -721,6 +739,7 @@ socket.on('updateName', (data, playernum) => {
         obj.setDepth(100).disableInteractive({ useHandCursor: false, draggable: false})
         cards_in_dropZone.push(obj)
       }
+      showActivePlayer(activePlayer);
      })
 
     //---- Game Play Area
@@ -788,6 +807,9 @@ socket.on('updateName', (data, playernum) => {
         gameObject.setDepth(playershand.indexOf(gameObject))
 
       } else if (dropped && !keys.includes(gameObject.name) ){  // what happens when card is dropped in dropZone
+          const playedCardName = gameObject.frame?.name || gameObject.name;
+          const originalX = gameObject.input.dragStartX;
+          const originalY = gameObject.input.dragStartY;
           gameObject.x = this.dropZone.x
           gameObject.y = this.dropZone.y
           gameObject.setDepth(100)
@@ -795,8 +817,32 @@ socket.on('updateName', (data, playernum) => {
           gameObject.disableInteractive({ useHandCursor: false, draggable: false})
           gameObject.input.enabled = false
           newcardplayed = true
-          socket.emit('cardPlayedclient', gameObject.frame.name, sessionStorage.getItem('playerNum'), playershand.indexOf(gameObject), socket.id)
-          gameObject.destroy()
+          const handIndex = playershand.indexOf(gameObject);
+          if (handIndex !== -1) playershand.splice(handIndex, 1);
+          if (!cards_in_dropZone.some((card) => card.name === playedCardName)) {
+            cards_in_dropZone.push(gameObject)
+          }
+          socket.emit(
+            'cardPlayedclient',
+            playedCardName,
+            sessionStorage.getItem('playerNum'),
+            handIndex,
+            (result) => {
+              if (result?.accepted || gameObject.destroyed) return;
+
+              newcardplayed = false;
+              cards_in_dropZone = cards_in_dropZone.filter((card) => card !== gameObject);
+              gameObject.setPosition(originalX, originalY);
+              gameObject.setDepth(handIndex);
+              gameObject.setInteractive({ useHandCursor: true, draggable: true });
+              this.input.setDraggable(gameObject);
+              gameObject.input.enabled = true;
+              playershand.splice(handIndex, 0, gameObject);
+              this.colorsturn.text = result?.reason === "turn"
+                ? "Not your turn"
+                : "Card play rejected";
+            }
+          )
 
       } else if (!dropped && keys.includes(gameObject.name)){  // what happens when marble is moved
         if (newcardplayed){
