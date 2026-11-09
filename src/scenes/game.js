@@ -1138,7 +1138,7 @@ async function enableLocalMedia() {
 async function enableRemotePlayback() {
   const button = document.getElementById("enable-playback");
   let allPlaybackStarted = true;
-  for (const video of document.querySelectorAll(".remote-video video")) {
+  for (const video of document.querySelectorAll("video.remote-video")) {
     try {
       await video.play();
     } catch (error) {
@@ -1150,7 +1150,7 @@ async function enableRemotePlayback() {
 }
 
 async function updateRemotePlaybackButton() {
-  const videos = document.querySelectorAll(".remote-video video");
+  const videos = document.querySelectorAll("video.remote-video");
   const button = document.getElementById("enable-playback");
   if (!button) return;
 
