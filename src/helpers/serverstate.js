@@ -144,6 +144,7 @@ export class RoomGameStore {
       lastCardPlayed: typeof state.lastCardPlayed === "string" ? state.lastCardPlayed : "",
       activePlayer: Number.isInteger(state.activePlayer) ? Number(state.activePlayer) : 1,
       pendingCardPlayer: Number.isInteger(state.pendingCardPlayer) ? Number(state.pendingCardPlayer) : null,
+      pendingActionId: typeof state.pendingActionId === "string" ? state.pendingActionId : null,
       authoritative: Boolean(state.authoritative),
       seenActions: Array.isArray(state.seenActions) ? [...state.seenActions] : []
     };
@@ -196,6 +197,7 @@ export class RoomGameStore {
     cardState.cardsplayed.push(gameObj);
     cardState.lastCardPlayed = gameObj;
     cardState.pendingCardPlayer = boardNum;
+    cardState.pendingActionId = `${roomName}:${boardNum}:${Date.now()}:${Math.random().toString(16).slice(2)}`;
 
     if (cardState.gameDeck.length === 0 && cardState.cardsplayed.length > 0) {
       shuffle(cardState.cardsplayed);
@@ -232,6 +234,7 @@ export class RoomGameStore {
     seenActions.push(actionKey);
     cardState.seenActions = seenActions;
     cardState.lastActionId = actionId;
+    cardState.pendingActionId = null;
     cardState.pendingCardPlayer = null;
     cardState.activePlayer = playerIndex === 4 ? 1 : playerIndex + 1;
 

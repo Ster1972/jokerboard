@@ -283,14 +283,23 @@ io.on("connection", (socket) => {
         
   })
 
-  socket.on('cardPlayedclient', function (gameObj, board, pos) {
+  socket.on('cardPlayedclient', function (gameObj, board, pos, actionId) {
     if (typeof gameObj !== "string" || gameObj.length > 8 || !Number.isInteger(pos) || pos < 0 || pos >= 6) return;
     const member = store.getUserById(socket.id);
     if (!member || String(member.playernum) !== String(board)) return;
     const newCard = store.playCard(roomName, gameObj, board, pos);
     if (newCard !== null) {
+      const cardState = store.getCardState(roomName);
+      const pendingActionId = typeof actionId === "string" && actionId.length > 0
+        ? actionId
+        : (cardState && cardState.pendingActionId ? cardState.pendingActionId : null);
+      if (pendingActionId) {
+        const roomState = store.getCardState(roomName);
+        if (roomState) roomState.pendingActionId = pendingActionId;
+      }
       io.in(roomName).emit('cardPlayed', gameObj)
       io.to(socket.id).emit('newcard', newCard, pos)
+      if (pendingActionId) io.to(socket.id).emit('cardActionId', pendingActionId)
   } // end of roomcarddata !== -1
    // console.log('show game deck -- end', hand1, hand2)
     
@@ -316,6 +325,15 @@ io.on("connection", (socket) => {
       if (!Number.isFinite(change.x) || !Number.isFinite(change.y)) return;
       if (Math.abs(change.x) > 2000 || Math.abs(change.y) > 2000) return;
       changes.push({ name: change.name, x: change.x, y: change.y });
+    }
+
+    const cardState = store.getCardState(member.gameName);
+    const playerNum = Number(member.playernum);
+    const pendingActionId = typeof gamestatus.actionId === "string" && gamestatus.actionId.length > 0
+      ? gamestatus.actionId
+      : (cardState && cardState.pendingCardPlayer === playerNum ? cardState.pendingActionId : null);
+    if (pendingActionId && cardState && cardState.pendingCardPlayer === playerNum) {
+      store.completeMarbleAction(member.gameName, playerNum, pendingActionId, changes);
     }
 
     const turn = typeof gamestatus.turn === "string" ? gamestatus.turn.slice(0, 120) : "";
