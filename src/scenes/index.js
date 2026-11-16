@@ -13,7 +13,7 @@ const config = {
     dom: {
         createContainer: true
     },
-    backgroundColor: '#0040C1',
+    backgroundColor: '#c13d00',
     physics: {
         default: 'arcade',
         arcade: { debug: false}

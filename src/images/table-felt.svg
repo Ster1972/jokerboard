@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1490" height="825" viewBox="0 0 1490 825">
+  <defs>
+    <radialGradient id="felt" cx="66%" cy="42%" r="82%">
+      <stop offset="0" stop-color="#245644"/>
+      <stop offset="0.62" stop-color="#174435"/>
+      <stop offset="1" stop-color="#0d2b24"/>
+    </radialGradient>
+    <pattern id="weave" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M24 0 48 24 24 48 0 24Z" fill="none" stroke="#c6b77d" stroke-opacity=".075" stroke-width="1"/>
+      <circle cx="24" cy="24" r="1.2" fill="#d7ddc7" fill-opacity=".08"/>
+    </pattern>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d2bd7a" stop-opacity=".42"/>
+      <stop offset=".5" stop-color="#d2bd7a" stop-opacity=".12"/>
+      <stop offset="1" stop-color="#d2bd7a" stop-opacity=".34"/>
+    </linearGradient>
+  </defs>
+  <rect width="1490" height="825" fill="url(#felt)"/>
+  <rect width="1490" height="825" fill="url(#weave)"/>
+  <g fill="#d2bd7a" fill-opacity=".11">
+    <path d="M1194 152 1220 178 1194 204 1168 178Z"/>
+    <path d="M1377 602c-17-20-45 3-27 21l27 27 27-27c18-18-10-41-27-21Z"/>
+    <path d="M1018 708c-11-18-37-4-27 14 5 10 18 13 27 5 9 8 22 5 27-5 10-18-16-32-27-14Zm-4 22h8l-4 19Z"/>
+  </g>
+</svg>

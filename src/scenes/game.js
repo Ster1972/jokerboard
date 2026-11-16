@@ -64,6 +64,7 @@ export default class Game extends Phaser.Scene {
   preload() {
 
     this.load.html('videodom', '/src/scenes/video.html');
+    this.load.image('table-felt', '/src/images/table-felt.svg');
     this.load.image('jokerboard', '/src/images/jokerboard.webp');
     this.load.image('origin-marker', '/src/images/origin-marker.png');
 
@@ -107,6 +108,9 @@ export default class Game extends Phaser.Scene {
     let webrtcStatsInterval = null
 
     // add dom to scene - used for WEBRTC stuff 
+    this.add.image(745, 412.5, 'table-felt')
+      .setDisplaySize(1490, 825)
+      .setDepth(-2);
     this.add.dom(1375, 170).createFromCache('videodom');
     this.add.image(410, 410, 'jokerboard')
       .setDisplaySize(820, 820)
