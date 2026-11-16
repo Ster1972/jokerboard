@@ -64,6 +64,7 @@ export default class Game extends Phaser.Scene {
   preload() {
 
     this.load.html('videodom', '/src/scenes/video.html');
+    this.load.image('jokerboard', '/src/images/jokerboard.webp');
     this.load.image('origin-marker', '/src/images/origin-marker.png');
 
     this.load.atlas(
@@ -107,6 +108,9 @@ export default class Game extends Phaser.Scene {
 
     // add dom to scene - used for WEBRTC stuff 
     this.add.dom(1375, 170).createFromCache('videodom');
+    this.add.image(410, 410, 'jokerboard')
+      .setDisplaySize(820, 820)
+      .setDepth(-1);
 
     // Circle for connected players
     let c1 = this.add.circle(975, 105, 11, 0x000000)
